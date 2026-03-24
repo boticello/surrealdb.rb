@@ -14,7 +14,7 @@ Gem::Specification.new do |spec|
                      'libsurrealdb_c to be installed or SURREALDB_LIB_PATH to be set.'
   spec.homepage = 'https://github.com/surrealdb/surrealdb.rb'
   spec.license = 'Apache-2.0'
-  spec.required_ruby_version = '>= 3.1'
+  spec.required_ruby_version = '>= 3.2'
 
   spec.metadata = {
     'homepage_uri' => spec.homepage,

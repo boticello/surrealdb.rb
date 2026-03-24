@@ -43,8 +43,8 @@ module SurrealDB
     # @param url [String] connection URL (ws://, wss://, http://, https://)
     # @param options [Hash] connection options
     # @return [Client]
-    def connect(url, **options)
-      client = Client.new(url, **options)
+    def connect(url, **)
+      client = Client.new(url, **)
       client.connect
       if block_given?
         begin
