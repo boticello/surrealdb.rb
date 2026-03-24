@@ -1,0 +1,296 @@
+# surrealdb.rb
+
+The official SurrealDB SDK for Ruby.
+
+[![CI](https://github.com/surrealdb/surrealdb.ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/surrealdb/surrealdb.ruby/actions/workflows/ci.yml)
+[![Gem Version](https://badge.fury.io/rb/surrealdb.svg)](https://badge.fury.io/rb/surrealdb)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
+
+## Installation
+
+```bash
+gem install surrealdb
+```
+
+Or add to your Gemfile:
+
+```ruby
+gem "surrealdb"
+```
+
+## Quick Start
+
+```ruby
+require "surrealdb"
+
+SurrealDB.connect("ws://localhost:8000") do |db|
+  db.signin(user: "root", pass: "root")
+  db.use("test", "test")
+
+  # Create
+  db.create("person", { name: "Alice", age: 30 })
+
+  # Select
+  people = db.select("person")
+
+  # Query
+  results = db.query("SELECT * FROM person WHERE age > $min", { "min" => 25 })
+
+  # Update
+  db.merge("person:alice", { email: "alice@example.com" })
+
+  # Delete
+  db.delete("person:alice")
+end
+```
+
+## Connection Types
+
+The SDK supports two transport protocols, selected automatically by URL scheme:
+
+| Scheme | Transport | Live Queries | Sessions |
+|--------|-----------|:------------:|:--------:|
+| `ws://`, `wss://` | WebSocket | Yes | Yes |
+| `http://`, `https://` | HTTP | No | No |
+
+```ruby
+# WebSocket (recommended for most use cases)
+client = SurrealDB::Client.new("ws://localhost:8000")
+
+# HTTP (stateless, simpler)
+client = SurrealDB::Client.new("http://localhost:8000")
+```
+
+## Authentication
+
+```ruby
+SurrealDB.connect("ws://localhost:8000") do |db|
+  # Root authentication
+  db.signin(user: "root", pass: "root")
+
+  # Namespace authentication
+  db.signin(user: "ns_user", pass: "ns_pass", ns: "my_namespace")
+
+  # Database authentication
+  db.signin(user: "db_user", pass: "db_pass", ns: "my_namespace", db: "my_database")
+
+  # Record user authentication
+  token = db.signup(
+    ns: "my_namespace",
+    db: "my_database",
+    ac: "user_access",
+    username: "alice",
+    password: "password123"
+  )
+
+  # Token authentication
+  db.authenticate(token)
+
+  # Invalidate session
+  db.invalidate
+end
+```
+
+## CRUD Operations
+
+```ruby
+SurrealDB.connect("ws://localhost:8000") do |db|
+  db.signin(user: "root", pass: "root")
+  db.use("test", "test")
+
+  # Create a record (auto-generated ID)
+  person = db.create("person", { name: "Alice", age: 30 })
+
+  # Create with specific ID
+  db.create("person:bob", { name: "Bob", age: 25 })
+
+  # Select all records from a table
+  people = db.select("person")
+
+  # Select a specific record
+  alice = db.select("person:alice")
+
+  # Insert multiple records
+  db.insert("person", [
+    { name: "Charlie", age: 35 },
+    { name: "Diana", age: 28 }
+  ])
+
+  # Update (full replace)
+  db.update("person:bob", { name: "Bob", age: 26, email: "bob@example.com" })
+
+  # Upsert (insert or update)
+  db.upsert("person:eve", { name: "Eve", age: 22 })
+
+  # Merge (partial update)
+  db.merge("person:bob", { email: "bob@newmail.com" })
+
+  # Patch (JSON Patch)
+  db.patch("person:bob", [
+    { "op" => "replace", "path" => "/age", "value" => 27 }
+  ])
+
+  # Delete a record
+  db.delete("person:bob")
+
+  # Delete all records from a table
+  db.delete("person")
+
+  # Create a relation
+  db.relate("person:alice", "knows", "person:bob", { since: 2024 })
+end
+```
+
+## Queries
+
+```ruby
+SurrealDB.connect("ws://localhost:8000") do |db|
+  db.signin(user: "root", pass: "root")
+  db.use("test", "test")
+
+  # Simple query
+  results = db.query("SELECT * FROM person")
+
+  # Parameterized query
+  results = db.query(
+    "SELECT * FROM person WHERE age > $min_age AND name = $name",
+    { "min_age" => 25, "name" => "Alice" }
+  )
+
+  # Multi-statement query
+  results = db.query(<<~SQL)
+    CREATE person:alice SET name = 'Alice', age = 30;
+    CREATE person:bob SET name = 'Bob', age = 25;
+    SELECT * FROM person;
+  SQL
+
+  # Connection-scoped variables
+  db.set("current_user", "alice")
+  results = db.query("SELECT * FROM person WHERE name = $current_user")
+  db.unset("current_user")
+
+  # Run a SurrealDB function
+  result = db.run("fn::my_function", "arg1", "arg2")
+end
+```
+
+## Live Queries
+
+Live queries are supported over WebSocket connections only.
+
+```ruby
+SurrealDB.connect("ws://localhost:8000") do |db|
+  db.signin(user: "root", pass: "root")
+  db.use("test", "test")
+
+  # Start a live query
+  live_id = db.live("person")
+
+  # Subscribe to notifications
+  db.subscribe(live_id) do |notification|
+    puts "Action: #{notification['action']}"
+    puts "Result: #{notification['result']}"
+  end
+
+  # Changes to the table will trigger notifications
+  db.create("person", { name: "Alice" })
+
+  # Stop the live query
+  db.kill(live_id)
+end
+```
+
+## SurrealDB Types
+
+The SDK provides Ruby types that map to SurrealDB's type system:
+
+```ruby
+# RecordID
+rid = SurrealDB::RecordID.new("person", "alice")
+rid = SurrealDB::RecordID.parse("person:alice")
+rid.table  # => "person"
+rid.id     # => "alice"
+
+# Table
+table = SurrealDB::Table.new("person")
+
+# Duration
+duration = SurrealDB::Duration.parse("1h30m")
+duration.secs   # => 5400
+duration.to_f   # => 5400.0
+
+# None (distinct from nil/NULL)
+SurrealDB::NONE
+
+# Geometry
+point = SurrealDB::GeometryPoint.new(-122.4194, 37.7749)
+line = SurrealDB::GeometryLine.new(point1, point2)
+polygon = SurrealDB::GeometryPolygon.new(exterior_ring)
+
+# Range
+range = SurrealDB::Range.new(
+  SurrealDB::BoundIncluded.new(1),
+  SurrealDB::BoundExcluded.new(10)
+)
+```
+
+## Error Handling
+
+```ruby
+begin
+  db.query("INVALID SYNTAX")
+rescue SurrealDB::QueryError => e
+  puts "Query failed: #{e.message}"
+rescue SurrealDB::NotFoundError => e
+  puts "Not found: #{e.message}"
+rescue SurrealDB::NotAllowedError => e
+  puts "Permission denied: #{e.message}"
+rescue SurrealDB::ServerError => e
+  # Catch-all for server errors
+  puts "Server error (#{e.kind}): #{e.message}"
+  puts "Cause: #{e.server_cause.message}" if e.server_cause
+rescue SurrealDB::ConnectionError => e
+  puts "Connection lost: #{e.message}"
+rescue SurrealDB::TimeoutError => e
+  puts "Request timed out: #{e.message}"
+end
+```
+
+## Configuration
+
+```ruby
+SurrealDB.configure do |config|
+  config.timeout = 60  # seconds (default: 30)
+  config.logger = Logger.new($stdout)
+end
+
+# Per-connection timeout
+client = SurrealDB::Client.new("ws://localhost:8000", timeout: 10)
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/my-feature`)
+3. Run the tests (`bundle exec rspec`)
+4. Run the linter (`bundle exec rubocop`)
+5. Commit your changes
+6. Push to the branch
+7. Create a Pull Request
+
+### Running Integration Tests
+
+Integration tests require a running SurrealDB instance:
+
+```bash
+docker run --rm -p 8000:8000 surrealdb/surrealdb:latest start --user root --pass root --allow-all
+bundle exec rspec spec/integration
+```
+
+## Links
+
+- [SurrealDB Documentation](https://surrealdb.com/docs)
+- [SurrealDB Ruby SDK Docs](https://surrealdb.com/docs/sdk/ruby)
+- [API Reference](https://rubydoc.info/gems/surrealdb)
+- [GitHub Issues](https://github.com/surrealdb/surrealdb.ruby/issues)
+- [Discord](https://discord.gg/surrealdb)

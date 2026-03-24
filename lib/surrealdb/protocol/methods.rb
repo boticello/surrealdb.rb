@@ -1,0 +1,31 @@
+# frozen_string_literal: true
+
+module SurrealDB
+  module Protocol
+    module Methods
+      USE           = "use"
+      INFO          = "info"
+      VERSION       = "version"
+      SIGNIN        = "signin"
+      SIGNUP        = "signup"
+      AUTHENTICATE  = "authenticate"
+      INVALIDATE    = "invalidate"
+      LET           = "let"
+      UNSET         = "unset"
+      LIVE          = "live"
+      KILL          = "kill"
+      QUERY         = "query"
+      SELECT        = "select"
+      CREATE        = "create"
+      INSERT        = "insert"
+      INSERT_RELATION = "insert_relation"
+      UPDATE        = "update"
+      UPSERT        = "upsert"
+      MERGE         = "merge"
+      PATCH         = "patch"
+      DELETE        = "delete"
+      RELATE        = "relate"
+      RUN           = "run"
+    end
+  end
+end

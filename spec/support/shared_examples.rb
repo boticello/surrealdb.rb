@@ -1,0 +1,127 @@
+# frozen_string_literal: true
+
+# Shared CRUD examples that run against both WebSocket and HTTP transports.
+RSpec.shared_examples "CRUD operations" do
+  let(:table) { unique_table("crud") }
+
+  after { client.close }
+
+  it "creates and selects a record" do
+    created = client.create(table, { "name" => "Alice", "age" => 30 })
+    expect(created).to be_a(Hash)
+    expect(created["name"]).to eq("Alice")
+
+    records = client.select(table)
+    expect(records).to be_a(Array)
+    expect(records.length).to eq(1)
+    expect(records[0]["name"]).to eq("Alice")
+  end
+
+  it "creates a record with a specific id" do
+    record_id = "#{table}:alice"
+    created = client.create(record_id, { "name" => "Alice" })
+    expect(created).to be_a(Hash)
+    expect(created["name"]).to eq("Alice")
+  end
+
+  it "inserts multiple records" do
+    data = [
+      { "name" => "Alice" },
+      { "name" => "Bob" }
+    ]
+    inserted = client.insert(table, data)
+    expect(inserted).to be_a(Array)
+    expect(inserted.length).to eq(2)
+  end
+
+  it "updates a record" do
+    client.create("#{table}:one", { "name" => "Alice", "age" => 30 })
+    updated = client.update("#{table}:one", { "name" => "Alice", "age" => 31 })
+    expect(updated).to be_a(Hash)
+    expect(updated["age"]).to eq(31)
+  end
+
+  it "upserts a record" do
+    upserted = client.upsert("#{table}:up1", { "name" => "Charlie", "score" => 100 })
+    expect(upserted).to be_a(Hash)
+    expect(upserted["name"]).to eq("Charlie")
+  end
+
+  it "merges data into a record" do
+    client.create("#{table}:m1", { "name" => "Alice", "age" => 30 })
+    merged = client.merge("#{table}:m1", { "email" => "alice@test.com" })
+    expect(merged["name"]).to eq("Alice")
+    expect(merged["email"]).to eq("alice@test.com")
+  end
+
+  it "patches a record" do
+    client.create("#{table}:p1", { "name" => "Alice", "age" => 30 })
+    patched = client.patch("#{table}:p1", [
+      { "op" => "replace", "path" => "/age", "value" => 31 }
+    ])
+    expect(patched).to be_a(Hash)
+  end
+
+  it "deletes a record" do
+    client.create("#{table}:d1", { "name" => "Alice" })
+    deleted = client.delete("#{table}:d1")
+    expect(deleted).to be_a(Hash)
+
+    remaining = client.select(table)
+    expect(remaining).to be_empty
+  end
+
+  it "deletes all records from a table" do
+    client.create("#{table}:d2", { "name" => "Alice" })
+    client.create("#{table}:d3", { "name" => "Bob" })
+    client.delete(table)
+
+    remaining = client.select(table)
+    expect(remaining).to be_empty
+  end
+end
+
+RSpec.shared_examples "query operations" do
+  let(:table) { unique_table("query") }
+
+  after { client.close }
+
+  it "executes a raw query" do
+    client.create(table, { "name" => "Alice", "age" => 30 })
+    results = client.query("SELECT * FROM #{table}")
+    expect(results).to be_a(Array)
+    expect(results[0]).to be_a(Hash)
+  end
+
+  it "executes a parameterized query" do
+    client.create(table, { "name" => "Alice", "age" => 30 })
+    client.create(table, { "name" => "Bob", "age" => 25 })
+    results = client.query("SELECT * FROM type::table($table) WHERE age > $min_age", {
+      "table" => table,
+      "min_age" => 28
+    })
+    expect(results).to be_a(Array)
+  end
+
+  it "handles multi-statement queries" do
+    results = client.query("CREATE #{table}:a SET name = 'Alice'; CREATE #{table}:b SET name = 'Bob';")
+    expect(results).to be_a(Array)
+  end
+end
+
+RSpec.shared_examples "auth operations" do
+  after { client.close }
+
+  it "returns version info" do
+    version = client.version
+    expect(version).to be_a(String)
+    expect(version).to include("surrealdb")
+  end
+
+  it "can invalidate and re-signin" do
+    client.invalidate
+    client.signin({ "user" => SurrealHelper::SURREAL_USER, "pass" => SurrealHelper::SURREAL_PASS })
+    client.use(SurrealHelper::SURREAL_NS, SurrealHelper::SURREAL_DB)
+    expect(client.version).to be_a(String)
+  end
+end
