@@ -2,7 +2,7 @@
 
 The official SurrealDB SDK for Ruby.
 
-[![CI](https://github.com/surrealdb/surrealdb.ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/surrealdb/surrealdb.ruby/actions/workflows/ci.yml)
+[![CI](https://github.com/surrealdb/surrealdb.rb/actions/workflows/ci.yml/badge.svg)](https://github.com/surrealdb/surrealdb.rb/actions/workflows/ci.yml)
 [![Gem Version](https://badge.fury.io/rb/surrealdb.svg)](https://badge.fury.io/rb/surrealdb)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 
@@ -355,5 +355,5 @@ bundle exec rspec spec/integration
 - [SurrealDB Documentation](https://surrealdb.com/docs)
 - [SurrealDB Ruby SDK Docs](https://surrealdb.com/docs/sdk/ruby)
 - [API Reference](https://rubydoc.info/gems/surrealdb)
-- [GitHub Issues](https://github.com/surrealdb/surrealdb.ruby/issues)
+- [GitHub Issues](https://github.com/surrealdb/surrealdb.rb/issues)
 - [Discord](https://discord.gg/surrealdb)

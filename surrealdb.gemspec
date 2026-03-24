@@ -12,15 +12,15 @@ Gem::Specification.new do |spec|
   spec.description = "Ruby client for SurrealDB with WebSocket and HTTP transports, " \
                      "CBOR serialization, and full support for queries, CRUD operations, " \
                      "authentication, and live queries."
-  spec.homepage = "https://github.com/surrealdb/surrealdb.ruby"
+  spec.homepage = "https://github.com/surrealdb/surrealdb.rb"
   spec.license = "Apache-2.0"
   spec.required_ruby_version = ">= 3.1"
 
   spec.metadata = {
     "homepage_uri" => spec.homepage,
-    "source_code_uri" => "https://github.com/surrealdb/surrealdb.ruby",
-    "changelog_uri" => "https://github.com/surrealdb/surrealdb.ruby/blob/main/CHANGELOG.md",
-    "bug_tracker_uri" => "https://github.com/surrealdb/surrealdb.ruby/issues",
+    "source_code_uri" => "https://github.com/surrealdb/surrealdb.rb",
+    "changelog_uri" => "https://github.com/surrealdb/surrealdb.rb/blob/main/CHANGELOG.md",
+    "bug_tracker_uri" => "https://github.com/surrealdb/surrealdb.rb/issues",
     "documentation_uri" => "https://surrealdb.com/docs/sdk/ruby",
     "rubygems_mfa_required" => "true"
   }

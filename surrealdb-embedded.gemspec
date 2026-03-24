@@ -12,13 +12,13 @@ Gem::Specification.new do |spec|
   spec.description = "Adds embedded database support (mem://, surrealkv://, file://) to the " \
                      "SurrealDB Ruby SDK via FFI bindings to libsurrealdb_c. Requires " \
                      "libsurrealdb_c to be installed or SURREALDB_LIB_PATH to be set."
-  spec.homepage = "https://github.com/surrealdb/surrealdb.ruby"
+  spec.homepage = "https://github.com/surrealdb/surrealdb.rb"
   spec.license = "Apache-2.0"
   spec.required_ruby_version = ">= 3.1"
 
   spec.metadata = {
     "homepage_uri" => spec.homepage,
-    "source_code_uri" => "https://github.com/surrealdb/surrealdb.ruby",
+    "source_code_uri" => "https://github.com/surrealdb/surrealdb.rb",
     "rubygems_mfa_required" => "true"
   }
 
