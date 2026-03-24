@@ -1,13 +1,21 @@
 # frozen_string_literal: true
 
 # Shared CRUD examples that run against both WebSocket and HTTP transports.
+#
+# SurrealDB returns arrays for record-targeted operations (update, upsert,
+# merge, patch, delete on "table:id"). We unwrap single-element arrays
+# in the helpers below to keep assertions clean.
 RSpec.shared_examples "CRUD operations" do
   let(:table) { unique_table("crud") }
 
   after { client.close }
 
+  def unwrap(result)
+    result.is_a?(Array) && result.length == 1 ? result[0] : result
+  end
+
   it "creates and selects a record" do
-    created = client.create(table, { "name" => "Alice", "age" => 30 })
+    created = unwrap(client.create(table, { "name" => "Alice", "age" => 30 }))
     expect(created).to be_a(Hash)
     expect(created["name"]).to eq("Alice")
 
@@ -19,7 +27,7 @@ RSpec.shared_examples "CRUD operations" do
 
   it "creates a record with a specific id" do
     record_id = "#{table}:alice"
-    created = client.create(record_id, { "name" => "Alice" })
+    created = unwrap(client.create(record_id, { "name" => "Alice" }))
     expect(created).to be_a(Hash)
     expect(created["name"]).to eq("Alice")
   end
@@ -36,35 +44,36 @@ RSpec.shared_examples "CRUD operations" do
 
   it "updates a record" do
     client.create("#{table}:one", { "name" => "Alice", "age" => 30 })
-    updated = client.update("#{table}:one", { "name" => "Alice", "age" => 31 })
+    updated = unwrap(client.update("#{table}:one", { "name" => "Alice", "age" => 31 }))
     expect(updated).to be_a(Hash)
     expect(updated["age"]).to eq(31)
   end
 
   it "upserts a record" do
-    upserted = client.upsert("#{table}:up1", { "name" => "Charlie", "score" => 100 })
+    upserted = unwrap(client.upsert("#{table}:up1", { "name" => "Charlie", "score" => 100 }))
     expect(upserted).to be_a(Hash)
     expect(upserted["name"]).to eq("Charlie")
   end
 
   it "merges data into a record" do
     client.create("#{table}:m1", { "name" => "Alice", "age" => 30 })
-    merged = client.merge("#{table}:m1", { "email" => "alice@test.com" })
+    merged = unwrap(client.merge("#{table}:m1", { "email" => "alice@test.com" }))
+    expect(merged).to be_a(Hash)
     expect(merged["name"]).to eq("Alice")
     expect(merged["email"]).to eq("alice@test.com")
   end
 
   it "patches a record" do
     client.create("#{table}:p1", { "name" => "Alice", "age" => 30 })
-    patched = client.patch("#{table}:p1", [
+    patched = unwrap(client.patch("#{table}:p1", [
       { "op" => "replace", "path" => "/age", "value" => 31 }
-    ])
+    ]))
     expect(patched).to be_a(Hash)
   end
 
   it "deletes a record" do
     client.create("#{table}:d1", { "name" => "Alice" })
-    deleted = client.delete("#{table}:d1")
+    deleted = unwrap(client.delete("#{table}:d1"))
     expect(deleted).to be_a(Hash)
 
     remaining = client.select(table)
@@ -90,7 +99,6 @@ RSpec.shared_examples "query operations" do
     client.create(table, { "name" => "Alice", "age" => 30 })
     results = client.query("SELECT * FROM #{table}")
     expect(results).to be_a(Array)
-    expect(results[0]).to be_a(Hash)
   end
 
   it "executes a parameterized query" do

@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-gemspec
+gemspec name: "surrealdb"
 
 group :development, :test do
   gem "rake", "~> 13.0"

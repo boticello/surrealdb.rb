@@ -17,8 +17,11 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 - [ ] Sockets are closed in all error paths (use `ensure` blocks)
 - [ ] Background threads are stopped when the connection closes
 - [ ] No references held to closed connections or sockets
-- [ ] `Queue` instances for pending requests are cleaned up after use
+- [ ] ConditionVariable entries for pending requests are cleaned up after use
 - [ ] Live query notification handlers are removed when `kill` is called
+- [ ] Embedded FFI: every `sr_surreal_rpc_execute` response buffer is freed with `sr_free_byte_arr`
+- [ ] Embedded FFI: every error string is freed with `sr_free_string`
+- [ ] Embedded FFI: `sr_surreal_rpc_free` is called on close, `sr_rpc_stream_free` for notification stream
 
 ## Error Handling
 
@@ -62,6 +65,31 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 - [ ] Transaction state is not leaked across unrelated operations
 - [ ] `detach` accepts a session ID parameter
 
+## Reconnection (ReliableWebSocket)
+
+- [ ] State tracking intercepts `use`, `signin`/`signup`/`authenticate`, `let`/`unset`
+- [ ] State replay re-authenticates before calling `use`
+- [ ] Exponential backoff respects `max_retries` and `reconnect_delay`
+- [ ] Live query handlers are re-registered after reconnect
+- [ ] Failed reconnection raises the original `ConnectionError`, not a reconnect-internal error
+- [ ] Credentials stored for replay are not leaked via inspect/to_s/logs
+
+## Embedded FFI
+
+- [ ] All FFI calls use `blocking: true` to release the GVL
+- [ ] `SR_FATAL` (-3) sets `@connected = false` and raises `ConnectionError`
+- [ ] `SR_ERROR` (-2) raises `ServerError` with the error string from `err_ptr`
+- [ ] Notification stream thread is joined/killed on `close`
+- [ ] Platform detection handles macOS, Linux, and Windows
+- [ ] `SURREALDB_LIB_PATH` env var is checked before system library path
+
+## Async / Fiber Compatibility
+
+- [ ] WebSocket `send_request` uses `ConditionVariable#wait` (not busy-wait polling)
+- [ ] `ConditionVariable#wait` receives a timeout to prevent indefinite blocking
+- [ ] Reader thread signals `entry[:cv].signal` under the mutex
+- [ ] `notify_pending_closed` signals all pending CVs so blocked fibers wake up
+
 ## Security
 
 - [ ] TLS certificate verification is enabled for `wss://` and `https://` connections
@@ -74,6 +102,8 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 
 - [ ] No unnecessary object allocations in the hot path (encode/decode)
 - [ ] HTTP connections reuse `Net::HTTP` persistent connections
+- [ ] WebSocket uses `ConditionVariable` signaling (no busy-wait CPU spin)
 - [ ] WebSocket reader thread uses `readpartial` (not byte-at-a-time reads)
+- [ ] Embedded FFI uses zero-copy byte passing where possible
 - [ ] CBOR encoding avoids redundant deep-copies of data
 - [ ] Request routing uses O(1) Hash lookup, not linear scan

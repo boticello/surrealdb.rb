@@ -46,12 +46,13 @@ end
 
 ## Connection Types
 
-The SDK supports two transport protocols, selected automatically by URL scheme:
+The SDK supports three transport protocols, selected automatically by URL scheme:
 
-| Scheme | Transport | Live Queries | Sessions |
-|--------|-----------|:------------:|:--------:|
-| `ws://`, `wss://` | WebSocket | Yes | Yes |
-| `http://`, `https://` | HTTP | No | No |
+| Scheme | Transport | Live Queries | Sessions | Requires |
+|--------|-----------|:------------:|:--------:|----------|
+| `ws://`, `wss://` | WebSocket | Yes | Yes | -- |
+| `http://`, `https://` | HTTP | No | No | -- |
+| `mem://`, `surrealkv://`, `file://` | Embedded | Yes | Yes | `surrealdb-embedded` gem |
 
 ```ruby
 # WebSocket (recommended for most use cases)
@@ -59,6 +60,10 @@ client = SurrealDB::Client.new("ws://localhost:8000")
 
 # HTTP (stateless, simpler)
 client = SurrealDB::Client.new("http://localhost:8000")
+
+# Embedded (in-process, no server needed)
+require "surrealdb/embedded"
+client = SurrealDB::Client.new("mem://")
 ```
 
 ## Authentication
@@ -174,9 +179,67 @@ SurrealDB.connect("ws://localhost:8000") do |db|
 end
 ```
 
+## Structured Query Results
+
+Use `query_raw` to get per-statement metadata (status, timing, errors) for multi-statement queries:
+
+```ruby
+results = db.query_raw("CREATE person:a SET name = 'Alice'; SELECT * FROM missing_table;")
+results.each do |qr|
+  if qr.ok?
+    puts "#{qr.time}: #{qr.result}"
+  else
+    puts "Error: #{qr.error}"
+  end
+end
+```
+
+## Embedded Database
+
+For in-process usage without a separate server, install the embedded gem:
+
+```bash
+gem install surrealdb-embedded
+```
+
+Then opt in with an extra require:
+
+```ruby
+require "surrealdb"
+require "surrealdb/embedded"
+
+SurrealDB.connect("mem://") do |db|
+  db.use("test", "test")
+  db.create("person", { "name" => "Alice" })
+end
+```
+
+Supported schemes: `mem://` (in-memory), `surrealkv://path` (persistent), `file://path` (file-based).
+
+Requires `libsurrealdb_c` installed on the system or pointed to via `SURREALDB_LIB_PATH`.
+
+## Automatic Reconnection
+
+Enable automatic WebSocket reconnection with exponential backoff:
+
+```ruby
+client = SurrealDB::Client.new("ws://localhost:8000",
+  reconnect: true,
+  reconnect_max_retries: 5,
+  reconnect_delay: 1.0
+)
+client.connect
+client.signin("user" => "root", "pass" => "root")
+client.use("test", "test")
+
+# If the connection drops, the SDK will automatically reconnect,
+# replay use/signin/let state, and retry the failed request.
+client.query("SELECT * FROM person")
+```
+
 ## Live Queries
 
-Live queries are supported over WebSocket connections only.
+Live queries are supported over WebSocket and embedded connections.
 
 ```ruby
 SurrealDB.connect("ws://localhost:8000") do |db|

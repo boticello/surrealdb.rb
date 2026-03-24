@@ -15,9 +15,11 @@ require_relative "surrealdb/cbor/decoder"
 require_relative "surrealdb/protocol/methods"
 require_relative "surrealdb/protocol/response"
 require_relative "surrealdb/protocol/rpc"
+require_relative "surrealdb/query_result"
 require_relative "surrealdb/connections/base"
 require_relative "surrealdb/connections/websocket"
 require_relative "surrealdb/connections/http"
+require_relative "surrealdb/connections/reliable_websocket"
 require_relative "surrealdb/client"
 
 module SurrealDB

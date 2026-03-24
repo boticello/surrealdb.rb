@@ -200,6 +200,19 @@ module SurrealDB
       @connection.send_request(Protocol::Methods::QUERY, params)
     end
 
+    # Executes a SurrealQL query and returns structured per-statement results.
+    # Unlike {#query}, this returns {QueryResult} objects with status, timing,
+    # and per-statement error information.
+    # @param sql [String] SurrealQL statement(s)
+    # @param vars [Hash] query variables
+    # @return [Array<QueryResult>]
+    def query_raw(sql, vars = {})
+      params = [sql]
+      params << vars unless vars.empty?
+      raw = @connection.send_request(Protocol::Methods::QUERY, params)
+      Array(raw).map { |stmt| QueryResult.from_response(stmt) }
+    end
+
     # Runs a SurrealDB function.
     # @param function_name [String]
     # @param args [Array] function arguments
@@ -226,7 +239,7 @@ module SurrealDB
     # @return [void]
     def subscribe(live_query_id, &block)
       require_live_queries!
-      @connection.on_notification(live_query_id, block)
+      @connection.on_notification(live_query_id.to_s, block)
     end
 
     # Kills a live query.
@@ -234,7 +247,7 @@ module SurrealDB
     # @return [void]
     def kill(live_query_id)
       require_live_queries!
-      @connection.remove_notification_handler(live_query_id)
+      @connection.remove_notification_handler(live_query_id.to_s)
       @connection.send_request(Protocol::Methods::KILL, [live_query_id])
     end
 
@@ -322,11 +335,17 @@ module SurrealDB
       uri = URI.parse(url)
       case uri.scheme
       when "ws", "wss"
-        Connections::WebSocket.new(url, **options)
+        ws = Connections::WebSocket.new(url, **options)
+        options[:reconnect] ? Connections::ReliableWebSocket.new(ws, **options) : ws
       when "http", "https"
         Connections::HTTP.new(url, **options)
+      when "mem", "memory", "surrealkv", "file"
+        require_embedded!
+        Connections::Embedded.new(url, **options)
       else
-        raise ArgumentError, "unsupported URL scheme: #{uri.scheme}. Use ws://, wss://, http://, or https://"
+        raise ArgumentError,
+              "unsupported URL scheme: #{uri.scheme}. " \
+              "Use ws://, wss://, http://, https://, mem://, surrealkv://, or file://"
       end
     end
 
@@ -355,6 +374,14 @@ module SurrealDB
       return if @connection.supports_live_queries?
 
       raise UnsupportedError, "#{feature} require a WebSocket connection (ws:// or wss://)"
+    end
+
+    def require_embedded!
+      return if defined?(Connections::Embedded)
+
+      raise LoadError,
+            "embedded connections require the surrealdb-embedded gem. " \
+            "Add `require \"surrealdb/embedded\"` after `require \"surrealdb\"`."
     end
   end
 end

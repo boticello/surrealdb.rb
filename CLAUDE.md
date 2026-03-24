@@ -23,10 +23,15 @@ This SDK follows the same connection-interface pattern as the Go (`surrealdb.go`
 ### Layer structure
 
 ```
-SurrealDB::Client          — Public API (CRUD, query, auth, live queries)
-SurrealDB::Protocol::RPC   — RPC request/response framing over CBOR
-SurrealDB::CBOR::*         — CBOR encode/decode with custom SurrealDB type tags
-SurrealDB::Connections::*  — Transport backends (WebSocket, HTTP)
+SurrealDB::Client                  — Public API (CRUD, query, auth, live queries)
+SurrealDB::QueryResult             — Per-statement result wrapper for query_raw
+SurrealDB::Protocol::RPC           — RPC request/response framing over CBOR
+SurrealDB::CBOR::*                 — CBOR encode/decode with custom SurrealDB type tags
+SurrealDB::Connections::WebSocket  — WebSocket transport (ConditionVariable-based, fiber-compatible)
+SurrealDB::Connections::HTTP       — HTTP transport (Net::HTTP)
+SurrealDB::Connections::ReliableWebSocket — Auto-reconnect wrapper with state replay
+SurrealDB::Connections::Embedded   — FFI to libsurrealdb_c (opt-in via require "surrealdb/embedded")
+SurrealDB::Native::*               — FFI bindings and platform detection (loaded by embedded.rb)
 ```
 
 - `Client` is the user-facing class. It delegates all operations to a `Connection`.
@@ -37,8 +42,10 @@ SurrealDB::Connections::*  — Transport backends (WebSocket, HTTP)
 ### Connection types
 
 URL scheme determines the transport:
-- `ws://` / `wss://` → `Connections::WebSocket` (background reader thread, live queries)
+- `ws://` / `wss://` → `Connections::WebSocket` (background reader thread, live queries, ConditionVariable-based)
 - `http://` / `https://` → `Connections::HTTP` (synchronous POST to /rpc)
+- `mem://` / `surrealkv://` / `file://` → `Connections::Embedded` (FFI to libsurrealdb_c, opt-in)
+- Pass `reconnect: true` to wrap WebSocket in `ReliableWebSocket` (auto-reconnect with state replay)
 
 ### CBOR custom tags
 
@@ -59,6 +66,14 @@ SurrealDB encodes custom types via numbered CBOR tags. See `lib/surrealdb/cbor/t
 6. **`send_rpc` escape hatch**: `Client#send_rpc(method, params)` forwards directly to the connection, letting users call new or undocumented RPC methods without waiting for SDK wrapper methods.
 
 7. **Sessions and transactions** (WebSocket only): `Client#attach`, `#detach`, `#begin_transaction`, `#commit`, `#cancel` wrap the SurrealDB v3 session/transaction RPC methods. These raise `UnsupportedError` on HTTP connections.
+
+8. **Embedded connection** (opt-in): `require "surrealdb/embedded"` loads FFI bindings to `libsurrealdb_c`. Uses the same CBOR RPC protocol as WebSocket/HTTP -- the C library only handles byte transport. Only 8 C functions are wrapped. All FFI calls use `blocking: true` to release the GVL.
+
+9. **Async/Fiber compatibility**: WebSocket `send_request` uses `ConditionVariable#wait` instead of busy-wait polling. This is compatible with Ruby's Fiber scheduler (Ruby 3.1+), so the SDK works transparently with the `async` gem and similar frameworks.
+
+10. **Reconnection**: `Connections::ReliableWebSocket` wraps a WebSocket with auto-reconnect. Tracks `use`, `signin`/`signup`/`authenticate`, `let` calls and replays them after reconnecting. Uses exponential backoff.
+
+11. **`query_raw`**: Returns `Array<QueryResult>` with per-statement `status`, `time`, `result`, `error`. Use when you need to inspect individual statement outcomes in multi-statement queries.
 
 ## Dependencies
 
@@ -85,12 +100,18 @@ SurrealDB encodes custom types via numbered CBOR tags. See `lib/surrealdb/cbor/t
 ```
 lib/surrealdb.rb                    Entry point
 lib/surrealdb/client.rb             Public API
+lib/surrealdb/query_result.rb       Per-statement result wrapper
 lib/surrealdb/errors.rb             Error hierarchy
 lib/surrealdb/models/               RecordID, Table, Duration, None, Range, Geometry
 lib/surrealdb/cbor/                 Tags, Encoder, Decoder
 lib/surrealdb/protocol/             RPC, Methods, Response
-lib/surrealdb/connections/          Base, WebSocket, HTTP
+lib/surrealdb/connections/          Base, WebSocket, HTTP, ReliableWebSocket
+lib/surrealdb/embedded.rb           Opt-in entrypoint for embedded connection
+lib/surrealdb/native/               FFI bindings (ffi.rb) + platform detection (platform.rb)
+lib/surrealdb/connections/embedded.rb  Embedded connection (loaded by embedded.rb)
+surrealdb-embedded.gemspec          Separate gem for embedded support
 spec/unit/                          Unit tests
-spec/integration/                   Integration tests (websocket/, http/)
+spec/unit/connections/              Connection-specific unit tests
+spec/integration/                   Integration tests (websocket/, http/, embedded/)
 spec/support/                       Helpers, shared examples
 ```

@@ -19,6 +19,12 @@ module SurrealDB
     # internal write mutex to prevent corruption, but the request/response lifecycle
     # (encode -> send -> wait -> decode) is not atomic. If you need concurrent
     # access, use a separate Client per thread or wrap calls in your own Mutex.
+    #
+    # ## Fiber Scheduler Compatibility
+    #
+    # Response waiting uses ConditionVariable#wait which is compatible with Ruby's
+    # Fiber scheduler (Ruby 3.1+). This means the SDK works transparently with
+    # the `async` gem and similar frameworks.
     class WebSocket < Base
       # @return [Integer] response timeout in seconds
       attr_reader :timeout
@@ -40,7 +46,7 @@ module SurrealDB
         @socket = open_socket(uri)
         ws_url = build_ws_url(uri)
 
-        @driver = ::WebSocket::Driver.client(SocketWrapper.new(@socket, ws_url))
+        @driver = ::WebSocket::Driver.client(SocketWrapper.new(@socket, ws_url), protocols: ["cbor"])
         setup_driver_handlers
 
         @driver.start
@@ -69,15 +75,13 @@ module SurrealDB
         raise ConnectionError, "not connected" unless @connected
 
         id, encoded = @rpc.encode_request(method, params)
-        queue = Queue.new
+        entry = { result: nil, cv: ConditionVariable.new }
 
-        @mutex.synchronize { @pending[id] = queue }
+        @mutex.synchronize { @pending[id] = entry }
 
         begin
           @write_mutex.synchronize { @driver.binary(encoded) }
-          result = dequeue_with_timeout(queue)
-          response = @rpc.decode_response(result)
-          Protocol::Response.extract_result(response)
+          wait_for_response(entry)
         ensure
           @mutex.synchronize { @pending.delete(id) }
         end
@@ -126,16 +130,21 @@ module SurrealDB
       end
 
       def setup_driver_handlers
-        @open_queue = Queue.new
-        @open_error = nil
+        @open_cv = ConditionVariable.new
+        @open_result = nil
 
         @driver.on :open do
-          @open_queue.push(:open)
+          @mutex.synchronize do
+            @open_result = :open
+            @open_cv.signal
+          end
         end
 
         @driver.on :error do |event|
-          @open_error = event.message
-          @open_queue.push(:error)
+          @mutex.synchronize do
+            @open_result = [:error, event.message]
+            @open_cv.signal
+          end
         end
 
         @driver.on :message do |event|
@@ -149,26 +158,23 @@ module SurrealDB
       end
 
       def wait_for_open
-        result = nil
         deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
 
         loop do
           remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
           raise ConnectionError, "WebSocket handshake timed out" if remaining <= 0
 
-          result = try_pop(@open_queue)
-          break if result
-
           data = read_socket
           raise ConnectionError, "connection closed during handshake" if data.nil? || data.empty?
 
           @driver.parse(data)
-        end
 
-        case result
-        when :open then return
-        when :error then raise ConnectionError, "WebSocket handshake failed: #{@open_error}"
-        else raise ConnectionError, "connection closed during handshake"
+          @mutex.synchronize do
+            case @open_result
+            when :open then return
+            when Array then raise ConnectionError, "WebSocket handshake failed: #{@open_result[1]}"
+            end
+          end
         end
       end
 
@@ -208,26 +214,34 @@ module SurrealDB
         id = raw["id"]
 
         if id
-          @mutex.synchronize do
-            queue = @pending[id]
-            queue&.push(bytes)
+          delivered = @mutex.synchronize do
+            entry = @pending[id]
+            if entry
+              entry[:result] = bytes
+              entry[:cv].signal
+              true
+            end
           end
+          dispatch_notification(raw) unless delivered
         else
-          dispatch_notification(raw, bytes)
+          dispatch_notification(raw)
         end
       rescue StandardError => e
         log(:warn, "Dropped malformed WebSocket message: #{e.class}: #{e.message}")
       end
 
-      def dispatch_notification(raw, _bytes)
+      def dispatch_notification(raw)
         result = raw["result"] || raw
-        live_id = result["id"] if result.is_a?(Hash)
-        return unless live_id
+        return unless result.is_a?(Hash)
+
+        resolved = CBOR::Decoder.resolve(result)
+        live_id = resolved["id"]&.to_s
+        action = resolved["action"]
+        return unless live_id && action
 
         handler = @mutex.synchronize { @live_handlers[live_id] }
         return unless handler
 
-        resolved = CBOR::Decoder.resolve(result)
         case handler
         when Queue then handler.push(resolved)
         when Proc  then handler.call(resolved)
@@ -240,38 +254,36 @@ module SurrealDB
         @reader_thread = nil
       end
 
-      # Pushes :closed onto every pending request queue so blocked callers
+      # Signals :closed on every pending request so blocked callers
       # fail fast instead of waiting for the full timeout.
       def notify_pending_closed
         @mutex.synchronize do
-          @pending.each_value { |q| q.push(:closed) }
+          @pending.each_value do |entry|
+            entry[:result] = :closed
+            entry[:cv].signal
+          end
           @pending.clear
         end
       end
 
-      def dequeue_with_timeout(queue)
-        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
+      # Waits for the reader thread to deliver a response into the entry,
+      # using ConditionVariable for Fiber-scheduler-compatible blocking.
+      def wait_for_response(entry)
+        result = @mutex.synchronize do
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
+          while entry[:result].nil?
+            remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            raise TimeoutError, "request timed out after #{@timeout}s" if remaining <= 0
 
-        loop do
-          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          raise TimeoutError, "request timed out after #{@timeout}s" if remaining <= 0
-
-          result = try_pop(queue)
-          if result
-            raise ConnectionError, "connection closed" if result == :closed
-
-            return result
+            entry[:cv].wait(@mutex, remaining)
           end
-
-          sleep 0.01
+          entry[:result]
         end
-      end
 
-      # Non-blocking pop that returns nil instead of raising on empty queue.
-      def try_pop(queue)
-        queue.pop(true)
-      rescue ThreadError
-        nil
+        raise ConnectionError, "connection closed" if result == :closed
+
+        response = @rpc.decode_response(result)
+        Protocol::Response.extract_result(response)
       end
 
       def log(level, message)

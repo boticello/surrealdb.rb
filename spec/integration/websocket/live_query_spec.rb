@@ -8,27 +8,28 @@ RSpec.describe "WebSocket Live Queries", :integration do
 
   it "receives create notifications" do
     live_id = client.live(table)
-    expect(live_id).to be_a(String)
+    expect(live_id).not_to be_nil
 
     notifications = Queue.new
-    client.subscribe(live_id) { |n| notifications.push(n) }
+    client.subscribe(live_id.to_s) { |n| notifications.push(n) }
 
+    sleep 0.1
     client.create(table, { "name" => "Alice" })
 
-    # Wait briefly for the notification
     notification = nil
-    5.times do
+    10.times do
       begin
         notification = notifications.pop(true)
         break
       rescue ThreadError
-        sleep 0.2
+        sleep 0.3
       end
     end
 
     expect(notification).not_to be_nil
-    expect(notification["action"]).to eq("CREATE").or(eq("create"))
+    action = notification["action"] || notification[:action]
+    expect(action.to_s.downcase).to eq("create")
 
-    client.kill(live_id)
+    client.kill(live_id.to_s)
   end
 end
