@@ -51,11 +51,11 @@ module SurrealDB
         stop_notification_stream
         Native.sr_surreal_rpc_free(@rpc_ptr) if @rpc_ptr
         @rpc_ptr = nil
-        log(:debug, "Embedded connection closed")
+        log(:debug, 'Embedded connection closed')
       end
 
       def send_request(method, params = [])
-        raise ConnectionError, "not connected" unless @connected
+        raise ConnectionError, 'not connected' unless @connected
 
         _id, encoded = @rpc.encode_request(method, params)
 
@@ -119,7 +119,7 @@ module SurrealDB
         stream_ptr = FFI::MemoryPointer.new(:pointer)
 
         ret = Native.sr_surreal_rpc_notifications(@rpc_ptr, err_ptr, stream_ptr)
-        return if ret < 0
+        return if ret.negative?
 
         @stream_ptr = stream_ptr.read_pointer
         @notification_thread = Thread.new do
@@ -135,14 +135,14 @@ module SurrealDB
 
           break if ret == Native::SR_CLOSED || !@connected
 
-          if ret > 0
-            raw_ptr = res_ptr.read_pointer
-            begin
-              bytes = raw_ptr.read_bytes(ret)
-              dispatch_notification(bytes)
-            ensure
-              Native.sr_free_byte_arr(raw_ptr, ret)
-            end
+          next unless ret.positive?
+
+          raw_ptr = res_ptr.read_pointer
+          begin
+            bytes = raw_ptr.read_bytes(ret)
+            dispatch_notification(bytes)
+          ensure
+            Native.sr_free_byte_arr(raw_ptr, ret)
           end
         end
       rescue StandardError => e
@@ -152,11 +152,11 @@ module SurrealDB
         @stream_ptr = nil
       end
 
-      def dispatch_notification(bytes)
+      def dispatch_notification(bytes) # rubocop:disable Metrics/CyclomaticComplexity
         raw = ::CBOR.decode(bytes)
         resolved = CBOR::Decoder.resolve(raw)
-        result = resolved.is_a?(Hash) ? (resolved["result"] || resolved) : resolved
-        live_id = result["id"] if result.is_a?(Hash)
+        result = resolved.is_a?(Hash) ? (resolved['result'] || resolved) : resolved
+        live_id = result['id'] if result.is_a?(Hash)
         return unless live_id
 
         handler = @mutex.synchronize { @live_handlers[live_id] }

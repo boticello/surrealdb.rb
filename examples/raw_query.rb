@@ -1,11 +1,11 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "surrealdb"
+require 'surrealdb'
 
-SurrealDB.connect("ws://localhost:8000") do |db|
-  db.signin("user" => "root", "pass" => "root")
-  db.use("test", "test")
+SurrealDB.connect('ws://localhost:8000') do |db|
+  db.signin('user' => 'root', 'pass' => 'root')
+  db.use('test', 'test')
 
   # Multi-statement query
   results = db.query(<<~SURQL)
@@ -22,11 +22,11 @@ SurrealDB.connect("ws://localhost:8000") do |db|
 
   # Parameterized query
   results = db.query(
-    "SELECT * FROM product WHERE price BETWEEN $min AND $max",
-    { "min" => 400, "max" => 800 }
+    'SELECT * FROM product WHERE price BETWEEN $min AND $max',
+    { 'min' => 400, 'max' => 800 }
   )
   puts "\nProducts between $400-$800: #{results}"
 
   # Cleanup
-  db.delete("product")
+  db.delete('product')
 end

@@ -15,7 +15,7 @@ module SurrealDB
     # @param table [String]
     # @param id [Object]
     def initialize(table, id)
-      raise ArgumentError, "table must be a non-empty string" if table.nil? || table.to_s.empty?
+      raise ArgumentError, 'table must be a non-empty string' if table.nil? || table.to_s.empty?
 
       @table = table.to_s.freeze
       @id = id
@@ -27,7 +27,7 @@ module SurrealDB
     # @return [RecordID]
     # @raise [ArgumentError] if the string is not a valid record ID
     def self.parse(str)
-      parts = str.to_s.split(":", 2)
+      parts = str.to_s.split(':', 2)
       raise ArgumentError, "invalid record ID: #{str}" if parts.length < 2 || parts[0].empty?
 
       table = parts[0]
@@ -72,9 +72,8 @@ module SurrealDB
 
     def format_id(value)
       case value
-      when Integer then value.to_s
       when String then escape_string_id(value)
-      when Array then "[#{value.map { |v| format_id(v) }.join(", ")}]"
+      when Array then "[#{value.map { |v| format_id(v) }.join(', ')}]"
       when Hash then format_object_id(value)
       else value.to_s
       end
@@ -87,7 +86,7 @@ module SurrealDB
     end
 
     def format_object_id(obj)
-      inner = obj.map { |k, v| "#{k}: #{format_id(v)}" }.join(", ")
+      inner = obj.map { |k, v| "#{k}: #{format_id(v)}" }.join(', ')
       "{ #{inner} }"
     end
   end

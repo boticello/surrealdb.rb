@@ -1,26 +1,26 @@
 # frozen_string_literal: true
 
-require_relative "surrealdb/version"
-require_relative "surrealdb/errors"
-require_relative "surrealdb/configuration"
-require_relative "surrealdb/models/none"
-require_relative "surrealdb/models/table"
-require_relative "surrealdb/models/record_id"
-require_relative "surrealdb/models/duration"
-require_relative "surrealdb/models/range"
-require_relative "surrealdb/models/geometry"
-require_relative "surrealdb/cbor/tags"
-require_relative "surrealdb/cbor/encoder"
-require_relative "surrealdb/cbor/decoder"
-require_relative "surrealdb/protocol/methods"
-require_relative "surrealdb/protocol/response"
-require_relative "surrealdb/protocol/rpc"
-require_relative "surrealdb/query_result"
-require_relative "surrealdb/connections/base"
-require_relative "surrealdb/connections/websocket"
-require_relative "surrealdb/connections/http"
-require_relative "surrealdb/connections/reliable_websocket"
-require_relative "surrealdb/client"
+require_relative 'surrealdb/version'
+require_relative 'surrealdb/errors'
+require_relative 'surrealdb/configuration'
+require_relative 'surrealdb/models/none'
+require_relative 'surrealdb/models/table'
+require_relative 'surrealdb/models/record_id'
+require_relative 'surrealdb/models/duration'
+require_relative 'surrealdb/models/range'
+require_relative 'surrealdb/models/geometry'
+require_relative 'surrealdb/cbor/tags'
+require_relative 'surrealdb/cbor/encoder'
+require_relative 'surrealdb/cbor/decoder'
+require_relative 'surrealdb/protocol/methods'
+require_relative 'surrealdb/protocol/response'
+require_relative 'surrealdb/protocol/rpc'
+require_relative 'surrealdb/query_result'
+require_relative 'surrealdb/connections/base'
+require_relative 'surrealdb/connections/websocket'
+require_relative 'surrealdb/connections/http'
+require_relative 'surrealdb/connections/reliable_websocket'
+require_relative 'surrealdb/client'
 
 module SurrealDB
   class << self

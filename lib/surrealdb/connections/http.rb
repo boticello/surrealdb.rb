@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "net/http"
-require "uri"
+require 'net/http'
+require 'uri'
 
 module SurrealDB
   module Connections
@@ -29,13 +29,11 @@ module SurrealDB
       def connect
         uri = URI.parse(@url)
         @http = Net::HTTP.new(uri.host, uri.port)
-        @http.use_ssl = (uri.scheme == "https")
+        @http.use_ssl = (uri.scheme == 'https')
         @http.open_timeout = @timeout
         @http.read_timeout = @timeout
 
-        if @http.use_ssl?
-          @http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-        end
+        @http.verify_mode = OpenSSL::SSL::VERIFY_PEER if @http.use_ssl?
 
         @http.start
         @connected = true
@@ -48,11 +46,11 @@ module SurrealDB
         @http&.finish if @http&.started?
         @connected = false
         @http = nil
-        log(:debug, "HTTP connection closed")
+        log(:debug, 'HTTP connection closed')
       end
 
       def send_request(method, params = [])
-        raise ConnectionError, "not connected" unless @connected
+        raise ConnectionError, 'not connected' unless @connected
 
         _id, encoded = @rpc.encode_request(method, params)
 
@@ -72,14 +70,14 @@ module SurrealDB
 
       def build_request(body)
         uri = URI.parse(@url)
-        path = uri.path.empty? ? "/rpc" : uri.path
+        path = uri.path.empty? ? '/rpc' : uri.path
 
         req = Net::HTTP::Post.new(path)
-        req["Content-Type"] = "application/cbor"
-        req["Accept"] = "application/cbor"
-        req["Authorization"] = "Bearer #{@auth_token}" if @auth_token
-        req["surreal-ns"] = @namespace if @namespace
-        req["surreal-db"] = @database if @database
+        req['Content-Type'] = 'application/cbor'
+        req['Accept'] = 'application/cbor'
+        req['Authorization'] = "Bearer #{@auth_token}" if @auth_token
+        req['surreal-ns'] = @namespace if @namespace
+        req['surreal-db'] = @database if @database
         req.body = body
         req
       end
@@ -87,9 +85,7 @@ module SurrealDB
       def execute_request(request)
         response = @http.request(request)
 
-        unless response.is_a?(Net::HTTPSuccess)
-          raise ConnectionError, "HTTP #{response.code}: #{response.message}"
-        end
+        raise ConnectionError, "HTTP #{response.code}: #{response.message}" unless response.is_a?(Net::HTTPSuccess)
 
         response
       rescue Net::OpenTimeout, Net::ReadTimeout => e
@@ -120,7 +116,7 @@ module SurrealDB
       def extract_token(result)
         case result
         when String then result
-        when Hash then result["access"] || result["token"]
+        when Hash then result['access'] || result['token']
         end
       end
 

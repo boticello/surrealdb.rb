@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "cbor"
-require "bigdecimal"
-require "time"
+require 'cbor'
+require 'bigdecimal'
+require 'time'
 
 module SurrealDB
   module CBOR
@@ -21,7 +21,7 @@ module SurrealDB
       # Recursively resolves CBOR::Tagged values to SurrealDB types.
       # @param obj [Object]
       # @return [Object]
-      def resolve(obj) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def resolve(obj)
         case obj
         when ::CBOR::Tagged
           resolve_tag(obj.tag, obj.value)
@@ -35,7 +35,7 @@ module SurrealDB
       end
 
       # Maps a CBOR tag number + value to the appropriate SurrealDB type.
-      def resolve_tag(tag, value) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def resolve_tag(tag, value) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength
         case tag
         when Tags::NONE
           SurrealDB::NONE
@@ -65,9 +65,7 @@ module SurrealDB
         when Tags::GEOMETRY_MULTIPOINT  then decode_multipoint(value)
         when Tags::GEOMETRY_MULTILINE   then decode_multiline(value)
         when Tags::GEOMETRY_MULTIPOLYGON then decode_multipolygon(value)
-        when Tags::GEOMETRY_COLLECTION  then decode_collection(value)
-        when Tags::FUTURE
-          value
+        when Tags::GEOMETRY_COLLECTION then decode_collection(value)
         else
           value
         end
@@ -75,11 +73,8 @@ module SurrealDB
 
       def resolve_uuid(tag, value)
         if tag == Tags::UUID_BINARY && value.is_a?(String)
-          bytes = value.bytes
-          format(
-            "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-            *bytes[0..15]
-          )
+          hex = value.unpack1('H32')
+          "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}"
         else
           value.to_s
         end

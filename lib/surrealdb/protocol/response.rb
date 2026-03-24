@@ -15,10 +15,11 @@ module SurrealDB
       def extract_result(data)
         raise ProtocolError, "malformed response: expected Hash, got #{data.class}" unless data.is_a?(Hash)
 
-        if data.key?("error")
-          raise_server_error(data["error"])
-        elsif data.key?("result")
-          data["result"]
+        err = data['error']
+        if err && !err.is_a?(SurrealDB::None) && !err.equal?(SurrealDB::NONE)
+          raise_server_error(err)
+        elsif data.key?('result')
+          data['result']
         else
           raise ProtocolError, "response missing both 'result' and 'error' keys"
         end

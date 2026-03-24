@@ -26,25 +26,25 @@ module SurrealDB
 
     # @return [Boolean] true when the statement executed without error
     def ok?
-      status == "OK"
+      status == 'OK'
     end
 
     # @return [Boolean] true when the statement produced an error
     def error?
-      status == "ERR"
+      status == 'ERR'
     end
 
     # Builds a QueryResult from a server response hash.
     # @param data [Hash] e.g. {"status"=>"OK", "time"=>"1ms", "result"=>[...]}
     # @return [QueryResult]
     def self.from_response(data)
-      return new(status: "OK", result: data) unless data.is_a?(Hash) && data.key?("status")
+      return new(status: 'OK', result: data) unless data.is_a?(Hash) && data.key?('status')
 
       new(
-        status: data["status"],
-        time: data["time"],
-        result: data["result"],
-        error: data["error"]
+        status: data['status'],
+        time: data['time'],
+        result: data['result'],
+        error: data['error']
       )
     end
 

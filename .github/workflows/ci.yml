@@ -37,7 +37,7 @@ jobs:
       fail-fast: false
       matrix:
         ruby: ["3.3"]
-        surrealdb: ["v2.2.1"]
+        surrealdb: ["v3.0.4"]
         transport: [websocket, http]
     env:
       SURREALDB_WS_URL: ws://localhost:8000

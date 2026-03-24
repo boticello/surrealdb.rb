@@ -11,11 +11,11 @@ module SurrealDB
     end
 
     def inspect
-      "SurrealDB::NONE"
+      'SurrealDB::NONE'
     end
 
     def to_s
-      "NONE"
+      'NONE'
     end
 
     def ==(other)
