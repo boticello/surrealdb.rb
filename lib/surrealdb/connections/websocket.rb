@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "socket"
-require "openssl"
-require "uri"
-require "websocket/driver"
+require 'socket'
+require 'openssl'
+require 'uri'
+require 'websocket/driver'
 
 module SurrealDB
   module Connections
@@ -46,7 +46,7 @@ module SurrealDB
         @socket = open_socket(uri)
         ws_url = build_ws_url(uri)
 
-        @driver = ::WebSocket::Driver.client(SocketWrapper.new(@socket, ws_url), protocols: ["cbor"])
+        @driver = ::WebSocket::Driver.client(SocketWrapper.new(@socket, ws_url), protocols: ['cbor'])
         setup_driver_handlers
 
         @driver.start
@@ -68,11 +68,11 @@ module SurrealDB
         @socket = nil
 
         notify_pending_closed
-        log(:debug, "WebSocket connection closed")
+        log(:debug, 'WebSocket connection closed')
       end
 
       def send_request(method, params = [])
-        raise ConnectionError, "not connected" unless @connected
+        raise ConnectionError, 'not connected' unless @connected
 
         id, encoded = @rpc.encode_request(method, params)
         entry = { result: nil, cv: ConditionVariable.new }
@@ -108,7 +108,7 @@ module SurrealDB
 
       def open_socket(uri)
         tcp = TCPSocket.new(uri.host, uri.port || default_port(uri.scheme))
-        return tcp unless uri.scheme == "wss"
+        return tcp unless uri.scheme == 'wss'
 
         ctx = OpenSSL::SSL::SSLContext.new
         ctx.verify_mode = OpenSSL::SSL::VERIFY_PEER
@@ -120,12 +120,12 @@ module SurrealDB
       end
 
       def default_port(scheme)
-        scheme == "wss" ? 443 : 80
+        scheme == 'wss' ? 443 : 80
       end
 
       def build_ws_url(uri)
-        path = uri.path.empty? ? "/rpc" : uri.path
-        port_str = uri.port ? ":#{uri.port}" : ""
+        path = uri.path.empty? ? '/rpc' : uri.path
+        port_str = uri.port ? ":#{uri.port}" : ''
         "#{uri.scheme}://#{uri.host}#{port_str}#{path}"
       end
 
@@ -162,10 +162,10 @@ module SurrealDB
 
         loop do
           remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          raise ConnectionError, "WebSocket handshake timed out" if remaining <= 0
+          raise ConnectionError, 'WebSocket handshake timed out' if remaining <= 0
 
           data = read_socket
-          raise ConnectionError, "connection closed during handshake" if data.nil? || data.empty?
+          raise ConnectionError, 'connection closed during handshake' if data.nil? || data.empty?
 
           @driver.parse(data)
 
@@ -208,10 +208,10 @@ module SurrealDB
       end
 
       def handle_message(data)
-        bytes = data.is_a?(Array) ? data.pack("C*") : data.b
+        bytes = data.is_a?(Array) ? data.pack('C*') : data.b
 
         raw = ::CBOR.decode(bytes)
-        id = raw["id"]
+        id = raw['id']
 
         if id
           delivered = @mutex.synchronize do
@@ -230,13 +230,13 @@ module SurrealDB
         log(:warn, "Dropped malformed WebSocket message: #{e.class}: #{e.message}")
       end
 
-      def dispatch_notification(raw)
-        result = raw["result"] || raw
+      def dispatch_notification(raw) # rubocop:disable Metrics/CyclomaticComplexity
+        result = raw['result'] || raw
         return unless result.is_a?(Hash)
 
         resolved = CBOR::Decoder.resolve(result)
-        live_id = resolved["id"]&.to_s
-        action = resolved["action"]
+        live_id = resolved['id']&.to_s
+        action = resolved['action']
         return unless live_id && action
 
         handler = @mutex.synchronize { @live_handlers[live_id] }
@@ -280,7 +280,7 @@ module SurrealDB
           entry[:result]
         end
 
-        raise ConnectionError, "connection closed" if result == :closed
+        raise ConnectionError, 'connection closed' if result == :closed
 
         response = @rpc.decode_response(result)
         Protocol::Response.extract_result(response)

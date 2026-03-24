@@ -3,7 +3,7 @@ require:
   - rubocop-rake
 
 AllCops:
-  TargetRubyVersion: 3.1
+  TargetRubyVersion: 3.2
   NewCops: enable
   SuggestExtensions: false
   Exclude:
@@ -42,11 +42,22 @@ Naming/MethodParameterName:
     - db
     - to
 
+RSpec/SpecFilePathFormat:
+  Enabled: false
+
+RSpec/DescribeClass:
+  Exclude:
+    - "spec/integration/**/*"
+    - "spec/unit/connections/embedded_spec.rb"
+
+RSpec/MultipleDescribes:
+  Enabled: false
+
 RSpec/MultipleExpectations:
-  Max: 5
+  Max: 7
 
 RSpec/ExampleLength:
-  Max: 15
+  Max: 20
 
 RSpec/NestedGroups:
   Max: 4

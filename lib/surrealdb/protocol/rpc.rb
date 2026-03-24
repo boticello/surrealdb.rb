@@ -18,9 +18,9 @@ module SurrealDB
       def encode_request(method, params = [])
         id = next_id
         payload = {
-          "id" => id,
-          "method" => method,
-          "params" => CBOR::Encoder.prepare(params)
+          'id' => id,
+          'method' => method,
+          'params' => CBOR::Encoder.prepare(params)
         }
         [id, ::CBOR.encode(payload)]
       end

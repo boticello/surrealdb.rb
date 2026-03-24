@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "uri"
+require 'uri'
 
 module SurrealDB
   # Main client for interacting with SurrealDB.
@@ -285,7 +285,7 @@ module SurrealDB
     # Attaches a new session to the connection.
     # @return [String] session ID
     def attach
-      require_websocket!("sessions")
+      require_websocket!('sessions')
       @connection.send_request(Protocol::Methods::ATTACH)
     end
 
@@ -293,28 +293,28 @@ module SurrealDB
     # @param session_id [String]
     # @return [void]
     def detach(session_id)
-      require_websocket!("sessions")
+      require_websocket!('sessions')
       @connection.send_request(Protocol::Methods::DETACH, [session_id])
     end
 
     # Begins a transaction on the current session.
     # @return [void]
     def begin_transaction
-      require_websocket!("transactions")
+      require_websocket!('transactions')
       @connection.send_request(Protocol::Methods::BEGIN_TXN)
     end
 
     # Commits the current transaction.
     # @return [void]
     def commit
-      require_websocket!("transactions")
+      require_websocket!('transactions')
       @connection.send_request(Protocol::Methods::COMMIT)
     end
 
     # Cancels (rolls back) the current transaction.
     # @return [void]
     def cancel
-      require_websocket!("transactions")
+      require_websocket!('transactions')
       @connection.send_request(Protocol::Methods::CANCEL)
     end
 
@@ -334,24 +334,23 @@ module SurrealDB
     def build_connection(url, **options)
       uri = URI.parse(url)
       case uri.scheme
-      when "ws", "wss"
+      when 'ws', 'wss'
         ws = Connections::WebSocket.new(url, **options)
         options[:reconnect] ? Connections::ReliableWebSocket.new(ws, **options) : ws
-      when "http", "https"
+      when 'http', 'https'
         Connections::HTTP.new(url, **options)
-      when "mem", "memory", "surrealkv", "file"
+      when 'mem', 'memory', 'surrealkv', 'file'
         require_embedded!
         Connections::Embedded.new(url, **options)
       else
         raise ArgumentError,
               "unsupported URL scheme: #{uri.scheme}. " \
-              "Use ws://, wss://, http://, https://, mem://, surrealkv://, or file://"
+              'Use ws://, wss://, http://, https://, mem://, surrealkv://, or file://'
       end
     end
 
     def resource_param(resource)
       case resource
-      when RecordID then resource.to_s
       when Table then resource.name
       else resource.to_s
       end
@@ -367,7 +366,7 @@ module SurrealDB
     def require_live_queries!
       return if @connection.supports_live_queries?
 
-      raise UnsupportedError, "live queries require a WebSocket connection (ws:// or wss://)"
+      raise UnsupportedError, 'live queries require a WebSocket connection (ws:// or wss://)'
     end
 
     def require_websocket!(feature)
@@ -380,8 +379,8 @@ module SurrealDB
       return if defined?(Connections::Embedded)
 
       raise LoadError,
-            "embedded connections require the surrealdb-embedded gem. " \
-            "Add `require \"surrealdb/embedded\"` after `require \"surrealdb\"`."
+            'embedded connections require the surrealdb-embedded gem. ' \
+            'Add `require "surrealdb/embedded"` after `require "surrealdb"`.'
     end
   end
 end

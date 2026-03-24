@@ -52,8 +52,7 @@ module SurrealDB
         track_state(method, params)
         @inner.send_request(method, params)
       rescue ConnectionError => e
-        raise unless reconnect!
-
+        reconnect!
         log(:info, "Reconnected after: #{e.message}")
         replay_state
         @inner.send_request(method, params)
@@ -71,7 +70,7 @@ module SurrealDB
 
       private
 
-      def track_state(method, params)
+      def track_state(method, params) # rubocop:disable Metrics/CyclomaticComplexity
         @state_mutex.synchronize do
           case method
           when Protocol::Methods::USE
@@ -98,29 +97,31 @@ module SurrealDB
       end
 
       # Attempts to reconnect with exponential backoff.
-      # @return [Boolean] true if reconnection succeeded
+      # @raise [ConnectionError] if all attempts fail
       def reconnect!
-        @max_retries.times do |attempt|
-          delay = @reconnect_delay * (2**attempt)
-          log(:debug, "Reconnection attempt #{attempt + 1}/#{@max_retries} in #{delay}s")
+        attempt = 0
+        while attempt < @max_retries
+          attempt += 1
+          delay = @reconnect_delay * (2**(attempt - 1))
+          log(:debug, "Reconnection attempt #{attempt}/#{@max_retries} in #{delay}s")
           sleep delay
 
           begin
             @inner.close
             @inner.connect
             @connected = true
-            return true
+            return
           rescue ConnectionError => e
-            log(:warn, "Reconnection attempt #{attempt + 1} failed: #{e.message}")
+            log(:warn, "Reconnection attempt #{attempt} failed: #{e.message}")
           end
         end
 
         @connected = false
-        false
+        raise ConnectionError, "reconnection failed after #{@max_retries} attempts"
       end
 
       # Replays tracked state onto the fresh connection.
-      def replay_state
+      def replay_state # rubocop:disable Metrics/CyclomaticComplexity
         ns, db, auth_method, auth_params, vars, live_subs = @state_mutex.synchronize do
           [@last_ns, @last_db, @last_auth_method, @last_auth_params,
            @variables.dup, @live_subscriptions.dup]
@@ -128,7 +129,7 @@ module SurrealDB
 
         if auth_method && auth_params
           case auth_method
-          when :signin      then @inner.send_request(Protocol::Methods::SIGNIN, auth_params)
+          when :signin then @inner.send_request(Protocol::Methods::SIGNIN, auth_params)
           when :signup       then @inner.send_request(Protocol::Methods::SIGNUP, auth_params)
           when :authenticate then @inner.send_request(Protocol::Methods::AUTHENTICATE, auth_params)
           end

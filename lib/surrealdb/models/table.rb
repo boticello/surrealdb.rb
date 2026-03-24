@@ -9,7 +9,7 @@ module SurrealDB
 
     # @param name [String]
     def initialize(name)
-      raise ArgumentError, "table name must be a non-empty string" if name.nil? || name.empty?
+      raise ArgumentError, 'table name must be a non-empty string' if name.nil? || name.empty?
 
       @name = name.freeze
     end

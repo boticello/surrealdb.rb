@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "cbor"
-require "bigdecimal"
-require "time"
+require 'cbor'
+require 'bigdecimal'
+require 'time'
 
 module SurrealDB
   module CBOR
@@ -19,7 +19,7 @@ module SurrealDB
       # Recursively converts SurrealDB types to CBOR::Tagged before encoding.
       # @param obj [Object]
       # @return [Object] CBOR-encodable representation
-      def prepare(obj) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def prepare(obj) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
         case obj
         when SurrealDB::None
           ::CBOR::Tagged.new(Tags::NONE, nil)
@@ -52,7 +52,7 @@ module SurrealDB
         when Time
           ::CBOR::Tagged.new(Tags::DATETIME_COMPACT, [obj.to_i, obj.nsec])
         when BigDecimal
-          ::CBOR::Tagged.new(Tags::DECIMAL_STRING, obj.to_s("F"))
+          ::CBOR::Tagged.new(Tags::DECIMAL_STRING, obj.to_s('F'))
         when Hash
           obj.transform_values { |v| prepare(v) }
         when Array

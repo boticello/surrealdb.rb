@@ -2,6 +2,7 @@ PATH
   remote: .
   specs:
     surrealdb (0.1.0)
+      bigdecimal
       cbor (~> 0.5)
       websocket-driver (~> 0.7)
 
@@ -10,6 +11,7 @@ GEM
   specs:
     ast (2.4.3)
     base64 (0.3.0)
+    bigdecimal (4.0.1)
     cbor (0.5.10.1)
     diff-lcs (1.6.2)
     json (2.19.2)
@@ -51,22 +53,12 @@ GEM
     rubocop-ast (1.49.1)
       parser (>= 3.3.7.2)
       prism (~> 1.7)
-    rubocop-capybara (2.22.1)
-      lint_roller (~> 1.1)
-      rubocop (~> 1.72, >= 1.72.1)
-    rubocop-factory_bot (2.28.0)
-      lint_roller (~> 1.1)
-      rubocop (~> 1.72, >= 1.72.1)
     rubocop-rake (0.7.1)
       lint_roller (~> 1.1)
       rubocop (>= 1.72.1)
-    rubocop-rspec (2.31.0)
-      rubocop (~> 1.40)
-      rubocop-capybara (~> 2.17)
-      rubocop-factory_bot (~> 2.22)
-      rubocop-rspec_rails (~> 2.28)
-    rubocop-rspec_rails (2.29.1)
-      rubocop (~> 1.61)
+    rubocop-rspec (3.9.0)
+      lint_roller (~> 1.1)
+      rubocop (~> 1.81)
     ruby-progressbar (1.13.0)
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
@@ -86,9 +78,9 @@ DEPENDENCIES
   rspec (~> 3.0)
   rubocop (~> 1.60)
   rubocop-rake (~> 0.6)
-  rubocop-rspec (~> 2.25)
+  rubocop-rspec (~> 3.0)
   surrealdb!
   yard (~> 0.9)
 
 BUNDLED WITH
-   2.5.22
+   2.7.1

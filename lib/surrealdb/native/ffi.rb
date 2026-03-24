@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "ffi"
+require 'ffi'
 
 module SurrealDB
   module Native
@@ -16,7 +16,7 @@ module SurrealDB
     end
 
     # Return code constants from surrealdb.h
-    SR_NONE   =  0  # success / no more items
+    SR_NONE = 0 # success / no more items
     SR_CLOSED = -1  # stream closed
     SR_ERROR  = -2  # recoverable error
     SR_FATAL  = -3  # connection poisoned, must not reuse
@@ -30,21 +30,21 @@ module SurrealDB
 
     # CBOR request/response
     attach_function :sr_surreal_rpc_execute,
-                    [:pointer, :pointer, :pointer, :pointer, :int], :int,
+                    %i[pointer pointer pointer pointer int], :int,
                     blocking: true
 
     # Live query notification stream
     attach_function :sr_surreal_rpc_notifications,
-                    [:pointer, :pointer, :pointer], :int,
+                    %i[pointer pointer pointer], :int,
                     blocking: true
     attach_function :sr_rpc_stream_next,
-                    [:pointer, :pointer], :int,
+                    %i[pointer pointer], :int,
                     blocking: true
     attach_function :sr_rpc_stream_free,
                     [:pointer], :void
 
     # Memory cleanup
     attach_function :sr_free_string, [:pointer], :void
-    attach_function :sr_free_byte_arr, [:pointer, :int], :void
+    attach_function :sr_free_byte_arr, %i[pointer int], :void
   end
 end

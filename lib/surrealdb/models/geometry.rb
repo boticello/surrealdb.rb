@@ -32,7 +32,7 @@ module SurrealDB
     attr_reader :points
 
     def initialize(*points)
-      raise ArgumentError, "a line requires at least 2 points" if points.length < 2
+      raise ArgumentError, 'a line requires at least 2 points' if points.length < 2
 
       @points = points.freeze
     end

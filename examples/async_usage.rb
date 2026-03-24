@@ -10,25 +10,25 @@
 # gem install async
 # ruby examples/async_usage.rb
 
-require "surrealdb"
+require 'surrealdb'
 
 begin
-  require "async"
+  require 'async'
 rescue LoadError
   warn "This example requires the 'async' gem: gem install async"
   exit 1
 end
 
 Async do
-  SurrealDB.connect("ws://localhost:8000") do |db|
-    db.signin("user" => "root", "pass" => "root")
-    db.use("test", "test")
+  SurrealDB.connect('ws://localhost:8000') do |db|
+    db.signin('user' => 'root', 'pass' => 'root')
+    db.use('test', 'test')
 
-    db.create("async_test", { "name" => "from async", "time" => Time.now.to_s })
+    db.create('async_test', { 'name' => 'from async', 'time' => Time.now.to_s })
 
-    results = db.select("async_test")
+    results = db.select('async_test')
     puts "Records: #{results}"
 
-    db.delete("async_test")
+    db.delete('async_test')
   end
 end

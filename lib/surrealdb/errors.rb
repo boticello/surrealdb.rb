@@ -50,22 +50,26 @@ module SurrealDB
 
     # @param target_kind [String]
     # @return [Boolean]
-    def has_kind?(target_kind) # rubocop:disable Naming/PredicateName
+    def has_kind?(target_kind) # rubocop:disable Naming/PredicatePrefix
       !find_cause(target_kind).nil?
     end
 
-    KIND_TO_CLASS = {}
+    # Populated after subclasses are defined at the bottom of this file.
+    KIND_TO_CLASS = {} # rubocop:disable Style/MutableConstant
 
     # Builds the appropriate ServerError subclass from a parsed error hash.
     # @param data [Hash] parsed error data with string keys
     # @return [ServerError]
     def self.from_response(data)
-      kind = data["kind"]
-      message = data["message"] || data["msg"]
-      code = data["code"]
-      details = data["details"]
+      return new(data.to_s) unless data.is_a?(Hash)
 
-      cause = data["cause"] ? from_response(data["cause"]) : nil
+      kind = data['kind']
+      message = data['message'] || data['msg']
+      code = data['code']
+      details = data['details']
+
+      raw_cause = data['cause']
+      cause = raw_cause.is_a?(Hash) ? from_response(raw_cause) : nil
 
       klass = KIND_TO_CLASS.fetch(kind, self)
       klass.new(message, code: code, kind: kind, details: details, server_cause: cause)
@@ -83,14 +87,14 @@ module SurrealDB
   class ThrownError < ServerError; end
 
   ServerError::KIND_TO_CLASS.merge!(
-    "Query" => QueryError,
-    "NotFound" => NotFoundError,
-    "NotAllowed" => NotAllowedError,
-    "AlreadyExists" => AlreadyExistsError,
-    "Validation" => ValidationError,
-    "Internal" => InternalServerError,
-    "Serialization" => SerializationError,
-    "Configuration" => ConfigurationError,
-    "Thrown" => ThrownError
+    'Query' => QueryError,
+    'NotFound' => NotFoundError,
+    'NotAllowed' => NotAllowedError,
+    'AlreadyExists' => AlreadyExistsError,
+    'Validation' => ValidationError,
+    'Internal' => InternalServerError,
+    'Serialization' => SerializationError,
+    'Configuration' => ConfigurationError,
+    'Thrown' => ThrownError
   ).freeze
 end

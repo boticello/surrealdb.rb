@@ -27,16 +27,16 @@ module SurrealDB
     end
 
     UNIT_MAP = {
-      "y" => NANOS_PER_YEAR,
-      "w" => NANOS_PER_WEEK,
-      "d" => NANOS_PER_DAY,
-      "h" => NANOS_PER_HOUR,
-      "m" => NANOS_PER_MINUTE,
-      "s" => NANOS_PER_SECOND,
-      "ms" => NANOS_PER_MILLI,
-      "us" => NANOS_PER_MICRO,
-      "µs" => NANOS_PER_MICRO,
-      "ns" => 1
+      'y' => NANOS_PER_YEAR,
+      'w' => NANOS_PER_WEEK,
+      'd' => NANOS_PER_DAY,
+      'h' => NANOS_PER_HOUR,
+      'm' => NANOS_PER_MINUTE,
+      's' => NANOS_PER_SECOND,
+      'ms' => NANOS_PER_MILLI,
+      'us' => NANOS_PER_MICRO,
+      'µs' => NANOS_PER_MICRO,
+      'ns' => 1
     }.freeze
 
     PARSE_REGEX = /(\d+)(y|w|d|h|ms|m|us|µs|ns|s)/
@@ -69,14 +69,14 @@ module SurrealDB
     end
 
     def to_s
-      return "0s" if @secs.zero? && @nanos.zero?
+      return '0s' if @secs.zero? && @nanos.zero?
 
       remaining = total_nanos
       parts = []
 
-      [["y", NANOS_PER_YEAR], ["w", NANOS_PER_WEEK], ["d", NANOS_PER_DAY],
-       ["h", NANOS_PER_HOUR], ["m", NANOS_PER_MINUTE], ["s", NANOS_PER_SECOND],
-       ["ms", NANOS_PER_MILLI], ["us", NANOS_PER_MICRO], ["ns", 1]].each do |unit, nanos_per|
+      [['y', NANOS_PER_YEAR], ['w', NANOS_PER_WEEK], ['d', NANOS_PER_DAY],
+       ['h', NANOS_PER_HOUR], ['m', NANOS_PER_MINUTE], ['s', NANOS_PER_SECOND],
+       ['ms', NANOS_PER_MILLI], ['us', NANOS_PER_MICRO], ['ns', 1]].each do |unit, nanos_per|
         next if remaining < nanos_per
 
         count = remaining / nanos_per
