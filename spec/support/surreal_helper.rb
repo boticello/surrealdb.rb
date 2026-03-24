@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "securerandom"
+
 module SurrealHelper
   SURREAL_WS_URL  = ENV.fetch("SURREALDB_WS_URL", "ws://localhost:8000")
   SURREAL_HTTP_URL = ENV.fetch("SURREALDB_HTTP_URL", "http://localhost:8000")

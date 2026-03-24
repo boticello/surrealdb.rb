@@ -52,7 +52,13 @@ SurrealDB encodes custom types via numbered CBOR tags. See `lib/surrealdb/cbor/t
 
 3. **Structured error hierarchy**: Server errors carry `kind`, `details`, and a `cause` chain matching SurrealDB v3's structured error format. We also handle legacy v2 code+message errors.
 
-4. **Thread safety**: The WebSocket connection uses a Mutex-protected pending-requests Hash and a background reader Thread. Request IDs are generated under a Mutex.
+4. **Thread safety**: Neither connection type is safe for concurrent use from multiple threads. The WebSocket connection uses a `@write_mutex` to prevent frame corruption and a `@mutex` for pending-request routing, but the overall request lifecycle is not atomic. The HTTP connection shares `Net::HTTP` and header state. Users needing concurrency should use one Client per thread.
+
+5. **Logger**: `SurrealDB.configuration.logger` is wired into both connections. WebSocket logs connection events at `:debug` level and dropped messages at `:warn`. HTTP logs connect/close at `:debug`. The logger must never receive credentials or auth tokens.
+
+6. **`send_rpc` escape hatch**: `Client#send_rpc(method, params)` forwards directly to the connection, letting users call new or undocumented RPC methods without waiting for SDK wrapper methods.
+
+7. **Sessions and transactions** (WebSocket only): `Client#attach`, `#detach`, `#begin_transaction`, `#commit`, `#cancel` wrap the SurrealDB v3 session/transaction RPC methods. These raise `UnsupportedError` on HTTP connections.
 
 ## Dependencies
 

@@ -11,6 +11,14 @@ module SurrealDB
     #
     # Uses websocket-driver for protocol handling and a background reader thread
     # to route responses by request ID. Supports live query notifications.
+    #
+    # ## Thread Safety
+    #
+    # A single WebSocket connection is NOT safe for concurrent use from multiple
+    # threads without external synchronization. Frame writes are serialized via an
+    # internal write mutex to prevent corruption, but the request/response lifecycle
+    # (encode -> send -> wait -> decode) is not atomic. If you need concurrent
+    # access, use a separate Client per thread or wrap calls in your own Mutex.
     class WebSocket < Base
       # @return [Integer] response timeout in seconds
       attr_reader :timeout
@@ -21,6 +29,7 @@ module SurrealDB
         @pending = {}
         @live_handlers = {}
         @mutex = Mutex.new
+        @write_mutex = Mutex.new
         @socket = nil
         @driver = nil
         @reader_thread = nil
@@ -36,11 +45,11 @@ module SurrealDB
 
         @driver.start
 
-        # Wait for the WebSocket handshake to complete
         wait_for_open
 
         @connected = true
         start_reader
+        log(:debug, "WebSocket connected to #{@url}")
       end
 
       def close
@@ -52,10 +61,8 @@ module SurrealDB
         @socket&.close
         @socket = nil
 
-        @mutex.synchronize do
-          @pending.each_value { |q| q.push(:closed) }
-          @pending.clear
-        end
+        notify_pending_closed
+        log(:debug, "WebSocket connection closed")
       end
 
       def send_request(method, params = [])
@@ -67,7 +74,7 @@ module SurrealDB
         @mutex.synchronize { @pending[id] = queue }
 
         begin
-          @driver.binary(encoded)
+          @write_mutex.synchronize { @driver.binary(encoded) }
           result = dequeue_with_timeout(queue)
           response = @rpc.decode_response(result)
           Protocol::Response.extract_result(response)
@@ -137,10 +144,7 @@ module SurrealDB
 
         @driver.on :close do
           @connected = false
-          @mutex.synchronize do
-            @pending.each_value { |q| q.push(:closed) }
-            @pending.clear
-          end
+          notify_pending_closed
         end
       end
 
@@ -180,12 +184,15 @@ module SurrealDB
           data = read_socket
           if data.nil? || data.empty?
             @connected = false
+            notify_pending_closed
             break
           end
           @driver.parse(data)
         end
-      rescue IOError, Errno::ECONNRESET, OpenSSL::SSL::SSLError
+      rescue IOError, Errno::ECONNRESET, OpenSSL::SSL::SSLError => e
         @connected = false
+        notify_pending_closed
+        log(:warn, "WebSocket reader terminated: #{e.class}: #{e.message}")
       end
 
       def read_socket
@@ -208,8 +215,8 @@ module SurrealDB
         else
           dispatch_notification(raw, bytes)
         end
-      rescue StandardError
-        # Malformed messages are silently dropped to keep the reader alive
+      rescue StandardError => e
+        log(:warn, "Dropped malformed WebSocket message: #{e.class}: #{e.message}")
       end
 
       def dispatch_notification(raw, _bytes)
@@ -231,6 +238,15 @@ module SurrealDB
         @reader_thread&.join(2)
         @reader_thread&.kill if @reader_thread&.alive?
         @reader_thread = nil
+      end
+
+      # Pushes :closed onto every pending request queue so blocked callers
+      # fail fast instead of waiting for the full timeout.
+      def notify_pending_closed
+        @mutex.synchronize do
+          @pending.each_value { |q| q.push(:closed) }
+          @pending.clear
+        end
       end
 
       def dequeue_with_timeout(queue)
@@ -256,6 +272,10 @@ module SurrealDB
         queue.pop(true)
       rescue ThreadError
         nil
+      end
+
+      def log(level, message)
+        SurrealDB.configuration.logger&.send(level, message)
       end
 
       # Minimal wrapper that gives websocket-driver the interface it expects:

@@ -78,6 +78,9 @@ module SurrealDB
   class AlreadyExistsError < ServerError; end
   class ValidationError < ServerError; end
   class InternalServerError < ServerError; end
+  class SerializationError < ServerError; end
+  class ConfigurationError < ServerError; end
+  class ThrownError < ServerError; end
 
   ServerError::KIND_TO_CLASS.merge!(
     "Query" => QueryError,
@@ -85,6 +88,9 @@ module SurrealDB
     "NotAllowed" => NotAllowedError,
     "AlreadyExists" => AlreadyExistsError,
     "Validation" => ValidationError,
-    "Internal" => InternalServerError
+    "Internal" => InternalServerError,
+    "Serialization" => SerializationError,
+    "Configuration" => ConfigurationError,
+    "Thrown" => ThrownError
   ).freeze
 end

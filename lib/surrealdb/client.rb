@@ -12,7 +12,7 @@ module SurrealDB
   #   client = SurrealDB::Client.new("ws://localhost:8000")
   #   client.connect
   #   client.use("test", "test")
-  #   client.signin(username: "root", password: "root")
+  #   client.signin("user" => "root", "pass" => "root")
   #   results = client.select("users")
   #   client.close
   class Client
@@ -58,14 +58,14 @@ module SurrealDB
     # --- Authentication ---
 
     # Signs in to SurrealDB.
-    # @param credentials [Hash] authentication credentials
+    # @param credentials [Hash] authentication credentials (string keys)
     # @return [String, Hash] JWT token or tokens hash
     def signin(credentials = {})
       @connection.send_request(Protocol::Methods::SIGNIN, [credentials])
     end
 
     # Signs up a new user.
-    # @param credentials [Hash] signup credentials
+    # @param credentials [Hash] signup credentials (string keys)
     # @return [String, Hash] JWT token or tokens hash
     def signup(credentials = {})
       @connection.send_request(Protocol::Methods::SIGNUP, [credentials])
@@ -117,7 +117,7 @@ module SurrealDB
     # @return [Hash] created record
     def create(resource, data = nil)
       params = [resource_param(resource)]
-      params << data if data
+      params << data unless data.nil?
       @connection.send_request(Protocol::Methods::CREATE, params)
     end
 
@@ -184,7 +184,7 @@ module SurrealDB
     # @return [Object] created relation
     def relate(from, relation, to, data = nil)
       params = [resource_param(from), relation, resource_param(to)]
-      params << data if data
+      params << data unless data.nil?
       @connection.send_request(Protocol::Methods::RELATE, params)
     end
 
@@ -203,9 +203,10 @@ module SurrealDB
     # Runs a SurrealDB function.
     # @param function_name [String]
     # @param args [Array] function arguments
+    # @param version [String, nil] optional function version
     # @return [Object]
-    def run(function_name, *args)
-      @connection.send_request(Protocol::Methods::RUN, [function_name, nil, args])
+    def run(function_name, *args, version: nil)
+      @connection.send_request(Protocol::Methods::RUN, [function_name, version, args])
     end
 
     # --- Live Queries ---
@@ -237,6 +238,21 @@ module SurrealDB
       @connection.send_request(Protocol::Methods::KILL, [live_query_id])
     end
 
+    # --- Import / Export ---
+
+    # Imports SurrealQL data or ML model data into the database.
+    # @param content [String] SurrealQL or ML content to import
+    # @return [Object]
+    def import_data(content)
+      @connection.send_request(Protocol::Methods::IMPORT, [content])
+    end
+
+    # Exports the database as SurrealQL.
+    # @return [String] exported data
+    def export_data
+      @connection.send_request(Protocol::Methods::EXPORT)
+    end
+
     # --- Info ---
 
     # Returns the SurrealDB server version.
@@ -249,6 +265,55 @@ module SurrealDB
     # @return [Hash, nil]
     def info
       @connection.send_request(Protocol::Methods::INFO)
+    end
+
+    # --- Sessions / Transactions (WebSocket only) ---
+
+    # Attaches a new session to the connection.
+    # @return [String] session ID
+    def attach
+      require_websocket!("sessions")
+      @connection.send_request(Protocol::Methods::ATTACH)
+    end
+
+    # Detaches a session from the connection.
+    # @param session_id [String]
+    # @return [void]
+    def detach(session_id)
+      require_websocket!("sessions")
+      @connection.send_request(Protocol::Methods::DETACH, [session_id])
+    end
+
+    # Begins a transaction on the current session.
+    # @return [void]
+    def begin_transaction
+      require_websocket!("transactions")
+      @connection.send_request(Protocol::Methods::BEGIN_TXN)
+    end
+
+    # Commits the current transaction.
+    # @return [void]
+    def commit
+      require_websocket!("transactions")
+      @connection.send_request(Protocol::Methods::COMMIT)
+    end
+
+    # Cancels (rolls back) the current transaction.
+    # @return [void]
+    def cancel
+      require_websocket!("transactions")
+      @connection.send_request(Protocol::Methods::CANCEL)
+    end
+
+    # --- Generic RPC ---
+
+    # Sends an arbitrary RPC method call. Useful as an escape hatch for
+    # server methods not yet wrapped by the SDK.
+    # @param method [String] RPC method name
+    # @param params [Array] method parameters
+    # @return [Object] decoded result
+    def send_rpc(method, params = [])
+      @connection.send_request(method, params)
     end
 
     private
@@ -284,6 +349,12 @@ module SurrealDB
       return if @connection.supports_live_queries?
 
       raise UnsupportedError, "live queries require a WebSocket connection (ws:// or wss://)"
+    end
+
+    def require_websocket!(feature)
+      return if @connection.supports_live_queries?
+
+      raise UnsupportedError, "#{feature} require a WebSocket connection (ws:// or wss://)"
     end
   end
 end

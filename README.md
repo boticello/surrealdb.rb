@@ -24,11 +24,11 @@ gem "surrealdb"
 require "surrealdb"
 
 SurrealDB.connect("ws://localhost:8000") do |db|
-  db.signin(user: "root", pass: "root")
+  db.signin("user" => "root", "pass" => "root")
   db.use("test", "test")
 
   # Create
-  db.create("person", { name: "Alice", age: 30 })
+  db.create("person", { "name" => "Alice", "age" => 30 })
 
   # Select
   people = db.select("person")
@@ -37,7 +37,7 @@ SurrealDB.connect("ws://localhost:8000") do |db|
   results = db.query("SELECT * FROM person WHERE age > $min", { "min" => 25 })
 
   # Update
-  db.merge("person:alice", { email: "alice@example.com" })
+  db.merge("person:alice", { "email" => "alice@example.com" })
 
   # Delete
   db.delete("person:alice")
@@ -66,21 +66,21 @@ client = SurrealDB::Client.new("http://localhost:8000")
 ```ruby
 SurrealDB.connect("ws://localhost:8000") do |db|
   # Root authentication
-  db.signin(user: "root", pass: "root")
+  db.signin("user" => "root", "pass" => "root")
 
   # Namespace authentication
-  db.signin(user: "ns_user", pass: "ns_pass", ns: "my_namespace")
+  db.signin("user" => "ns_user", "pass" => "ns_pass", "ns" => "my_namespace")
 
   # Database authentication
-  db.signin(user: "db_user", pass: "db_pass", ns: "my_namespace", db: "my_database")
+  db.signin("user" => "db_user", "pass" => "db_pass", "ns" => "my_namespace", "db" => "my_database")
 
   # Record user authentication
   token = db.signup(
-    ns: "my_namespace",
-    db: "my_database",
-    ac: "user_access",
-    username: "alice",
-    password: "password123"
+    "ns" => "my_namespace",
+    "db" => "my_database",
+    "ac" => "user_access",
+    "username" => "alice",
+    "password" => "password123"
   )
 
   # Token authentication
@@ -95,14 +95,14 @@ end
 
 ```ruby
 SurrealDB.connect("ws://localhost:8000") do |db|
-  db.signin(user: "root", pass: "root")
+  db.signin("user" => "root", "pass" => "root")
   db.use("test", "test")
 
   # Create a record (auto-generated ID)
-  person = db.create("person", { name: "Alice", age: 30 })
+  person = db.create("person", { "name" => "Alice", "age" => 30 })
 
   # Create with specific ID
-  db.create("person:bob", { name: "Bob", age: 25 })
+  db.create("person:bob", { "name" => "Bob", "age" => 25 })
 
   # Select all records from a table
   people = db.select("person")
@@ -112,18 +112,18 @@ SurrealDB.connect("ws://localhost:8000") do |db|
 
   # Insert multiple records
   db.insert("person", [
-    { name: "Charlie", age: 35 },
-    { name: "Diana", age: 28 }
+    { "name" => "Charlie", "age" => 35 },
+    { "name" => "Diana", "age" => 28 }
   ])
 
   # Update (full replace)
-  db.update("person:bob", { name: "Bob", age: 26, email: "bob@example.com" })
+  db.update("person:bob", { "name" => "Bob", "age" => 26, "email" => "bob@example.com" })
 
   # Upsert (insert or update)
-  db.upsert("person:eve", { name: "Eve", age: 22 })
+  db.upsert("person:eve", { "name" => "Eve", "age" => 22 })
 
   # Merge (partial update)
-  db.merge("person:bob", { email: "bob@newmail.com" })
+  db.merge("person:bob", { "email" => "bob@newmail.com" })
 
   # Patch (JSON Patch)
   db.patch("person:bob", [
@@ -137,7 +137,7 @@ SurrealDB.connect("ws://localhost:8000") do |db|
   db.delete("person")
 
   # Create a relation
-  db.relate("person:alice", "knows", "person:bob", { since: 2024 })
+  db.relate("person:alice", "knows", "person:bob", { "since" => 2024 })
 end
 ```
 
@@ -145,7 +145,7 @@ end
 
 ```ruby
 SurrealDB.connect("ws://localhost:8000") do |db|
-  db.signin(user: "root", pass: "root")
+  db.signin("user" => "root", "pass" => "root")
   db.use("test", "test")
 
   # Simple query
@@ -180,7 +180,7 @@ Live queries are supported over WebSocket connections only.
 
 ```ruby
 SurrealDB.connect("ws://localhost:8000") do |db|
-  db.signin(user: "root", pass: "root")
+  db.signin("user" => "root", "pass" => "root")
   db.use("test", "test")
 
   # Start a live query
@@ -193,7 +193,7 @@ SurrealDB.connect("ws://localhost:8000") do |db|
   end
 
   # Changes to the table will trigger notifications
-  db.create("person", { name: "Alice" })
+  db.create("person", { "name" => "Alice" })
 
   # Stop the live query
   db.kill(live_id)

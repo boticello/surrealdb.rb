@@ -8,7 +8,9 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 - [ ] No race conditions in request ID generation or pending-request routing
 - [ ] Background reader thread is properly joined/killed on `close`
 - [ ] No deadlocks between the reader thread and `send_request` callers
+- [ ] WebSocket frame writes are serialized via `@write_mutex`
 - [ ] Live query handlers are registered/removed under the connection mutex
+- [ ] Reader thread EOF/error paths push `:closed` onto all pending queues
 
 ## Memory and Resource Management
 
@@ -20,13 +22,14 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 
 ## Error Handling
 
-- [ ] No exceptions are silently swallowed (except in the reader thread for malformed messages)
+- [ ] Malformed WebSocket messages are logged at `:warn` level (not silently dropped)
 - [ ] Server errors are mapped to the correct `ServerError` subclass based on `kind`
 - [ ] Both legacy (code + message) and v3 structured (kind + details + cause) error formats are handled
 - [ ] `ConnectionError` is raised when operations are attempted on a closed connection
 - [ ] `TimeoutError` is raised with a clear message including the timeout duration
-- [ ] `UnsupportedError` is raised for live queries on HTTP connections
+- [ ] `UnsupportedError` is raised for live queries, sessions, and transactions on HTTP connections
 - [ ] Cause chains are preserved and traversable via `#server_cause` and `#find_cause`
+- [ ] `send_rpc` validates that `method` is a non-empty String
 
 ## CBOR Fidelity
 
@@ -53,11 +56,18 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 - [ ] Unknown CBOR tags are passed through rather than causing errors
 - [ ] Unknown error kinds fall back to `ServerError` rather than crashing
 
+## Sessions and Transactions
+
+- [ ] `attach`/`detach`/`begin_transaction`/`commit`/`cancel` raise `UnsupportedError` on HTTP
+- [ ] Transaction state is not leaked across unrelated operations
+- [ ] `detach` accepts a session ID parameter
+
 ## Security
 
 - [ ] TLS certificate verification is enabled for `wss://` and `https://` connections
 - [ ] Credentials are not logged or included in error messages
 - [ ] Auth tokens are not leaked in exception backtraces
+- [ ] Logger output does not contain credentials or tokens
 - [ ] Input strings are validated before being sent to the server
 
 ## Performance

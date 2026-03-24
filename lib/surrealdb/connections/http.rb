@@ -8,7 +8,14 @@ module SurrealDB
     # HTTP transport for SurrealDB RPC.
     #
     # Each request is a synchronous POST to /rpc with a CBOR body.
-    # Does not support live queries or sessions.
+    # Does not support live queries, sessions, or transactions.
+    #
+    # ## Thread Safety
+    #
+    # A single HTTP connection is NOT safe for concurrent use from multiple
+    # threads. The underlying Net::HTTP instance is not thread-safe and the
+    # header state (ns/db/token) is shared. Use a separate Client per thread
+    # or wrap calls in your own Mutex.
     class HTTP < Base
       def initialize(url, **options)
         super
@@ -32,6 +39,7 @@ module SurrealDB
 
         @http.start
         @connected = true
+        log(:debug, "HTTP connected to #{@url}")
       end
 
       def close
@@ -40,6 +48,7 @@ module SurrealDB
         @http&.finish if @http&.started?
         @connected = false
         @http = nil
+        log(:debug, "HTTP connection closed")
       end
 
       def send_request(method, params = [])
@@ -47,7 +56,6 @@ module SurrealDB
 
         _id, encoded = @rpc.encode_request(method, params)
 
-        # Intercept use() calls to track ns/db for headers
         track_use(method, params)
 
         request = build_request(encoded)
@@ -114,6 +122,10 @@ module SurrealDB
         when String then result
         when Hash then result["access"] || result["token"]
         end
+      end
+
+      def log(level, message)
+        SurrealDB.configuration.logger&.send(level, message)
       end
     end
   end
