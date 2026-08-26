@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'weakref'
+
 module SurrealDB
   module Connections
     # Embedded transport for SurrealDB via FFI to libsurrealdb_c.
@@ -19,6 +21,146 @@ module SurrealDB
     class Embedded < Base
       TIMEOUT_RANGE = (0..255)
 
+      # Owns native resources independently from the connection object so its
+      # finalizer can release an abandoned connection without retaining it.
+      class NativeResources
+        attr_reader :stream_ptr
+
+        def initialize(rpc_ptr)
+          @rpc_ptr = rpc_ptr
+          @stream_ptr = nil
+          @reader_thread = nil
+          @stream_closed = false
+          @released = false
+          @mutex = Mutex.new
+          @reader_registered = ConditionVariable.new
+        end
+
+        def register_stream(stream_ptr)
+          @mutex.synchronize { @stream_ptr = stream_ptr }
+        end
+
+        def register_reader(reader_thread)
+          @mutex.synchronize do
+            @reader_thread = reader_thread
+            @reader_registered.broadcast
+          end
+        end
+
+        def wait_for_reader_registration
+          @mutex.synchronize { @reader_registered.wait(@mutex) until @reader_thread }
+        end
+
+        def close_stream
+          stream_ptr = @mutex.synchronize do
+            next if @stream_closed
+
+            @stream_closed = true
+            @stream_ptr
+          end
+          Native.sr_rpc_stream_close(stream_ptr) if stream_ptr
+        end
+
+        def shutdown
+          close_stream
+          reader_thread = @mutex.synchronize { @reader_thread }
+          reader_thread.join if reader_thread && !reader_thread.equal?(Thread.current)
+          release
+        end
+
+        def finalizer
+          proc { release_after_garbage_collection }
+        end
+
+        private
+
+        def release
+          resources = @mutex.synchronize do
+            next if @released
+
+            @released = true
+            stream_ptr = @stream_ptr
+            rpc_ptr = @rpc_ptr
+            @stream_ptr = nil
+            @rpc_ptr = nil
+            @reader_thread = nil
+            [stream_ptr, rpc_ptr]
+          end
+          return [nil, nil] unless resources
+
+          stream_ptr, rpc_ptr = resources
+          Native.sr_rpc_stream_free(stream_ptr) if stream_ptr
+          return [nil, nil] unless rpc_ptr
+
+          err_ptr = FFI::MemoryPointer.new(:pointer)
+          ret = Native.sr_surreal_rpc_close(rpc_ptr, err_ptr)
+          [ret, err_ptr]
+        ensure
+          Native.sr_surreal_rpc_free(rpc_ptr) if rpc_ptr
+        end
+
+        def release_after_garbage_collection
+          ret, err_ptr = shutdown
+          return unless ret&.negative?
+
+          error_ptr = err_ptr.read_pointer
+          Native.sr_free_string(error_ptr) unless error_ptr.null?
+        rescue StandardError
+          # Finalizers cannot safely report errors and cleanup is already best-effort.
+        end
+      end
+
+      # Reads native notifications without capturing an Embedded instance.
+      class NotificationReader
+        def self.start(resources, connection_ref)
+          Thread.new(resources, connection_ref) do |reader_resources, reader_connection_ref|
+            Thread.current.report_on_exception = false
+            reader_resources.wait_for_reader_registration
+            run(reader_resources, reader_connection_ref)
+          end
+        end
+
+        def self.run(resources, connection_ref)
+          loop { break unless continue_reading?(resources, connection_ref) }
+        rescue StandardError => e
+          with_connection(connection_ref) do |connection|
+            connection.send(:log, :warn, "Embedded notification reader terminated: #{e.class}: #{e.message}")
+          end
+        end
+
+        def self.continue_reading?(resources, connection_ref)
+          res_ptr = FFI::MemoryPointer.new(:pointer)
+          length = Native.sr_rpc_stream_next(resources.stream_ptr, res_ptr)
+          return false if length == Native::SR_CLOSED
+
+          if length.negative?
+            with_connection(connection_ref) do |connection|
+              connection.send(:log, :warn, "Embedded notification stream failed with code #{length}")
+            end
+            return false
+          end
+
+          return true if with_connection(connection_ref) do |connection|
+            response = connection.send(:read_and_free_response, res_ptr, length)
+            connection.send(:dispatch_notification, response)
+          end
+
+          Native.sr_free_byte_arr(res_ptr.read_pointer, length)
+          resources.close_stream
+          false
+        end
+
+        def self.with_connection(connection_ref)
+          connection = connection_ref.__getobj__
+          yield connection
+          true
+        rescue WeakRef::RefError
+          false
+        end
+
+        private_class_method :continue_reading?, :with_connection
+      end
+
       def initialize(url, **options)
         super
         default_timeout = options.fetch(:timeout, SurrealDB.configuration.timeout)
@@ -30,7 +172,7 @@ module SurrealDB
         validate_strict_option(options.fetch(:strict, false))
         @native_url = normalize_url(url)
         @rpc_ptr = nil
-        @stream_ptr = nil
+        @resources = nil
         @reader_thread = nil
         @live_handlers = {}
         @live_mutex = Mutex.new
@@ -55,6 +197,8 @@ module SurrealDB
           check_error!(ret, err_ptr)
 
           @rpc_ptr = surreal_ptr.read_pointer
+          @resources = NativeResources.new(@rpc_ptr)
+          ObjectSpace.define_finalizer(self, @resources.finalizer)
           @connected = true
           start_notification_reader
           log(:debug, "Embedded connection opened: #{@url}")
@@ -67,7 +211,7 @@ module SurrealDB
 
       def close
         verify_owner_thread!
-        return unless @rpc_ptr
+        return unless @resources
 
         @connected = false
         release_rpc_context
@@ -193,28 +337,10 @@ module SurrealDB
         ret = Native.sr_surreal_rpc_notifications(@rpc_ptr, err_ptr, stream_ptr)
         check_error!(ret, err_ptr)
 
-        @stream_ptr = stream_ptr.read_pointer
-        @reader_thread = Thread.new do
-          Thread.current.report_on_exception = false
-          notification_loop
-        end
-      end
-
-      def notification_loop
-        loop do
-          res_ptr = FFI::MemoryPointer.new(:pointer)
-          length = Native.sr_rpc_stream_next(@stream_ptr, res_ptr)
-          break if length == Native::SR_CLOSED
-
-          if length.negative?
-            log(:warn, "Embedded notification stream failed with code #{length}")
-            break
-          end
-
-          dispatch_notification(read_and_free_response(res_ptr, length))
-        end
-      rescue StandardError => e
-        log(:warn, "Embedded notification reader terminated: #{e.class}: #{e.message}")
+        @resources.register_stream(stream_ptr.read_pointer)
+        reader_thread = NotificationReader.start(@resources, WeakRef.new(self))
+        @resources.register_reader(reader_thread)
+        @reader_thread = reader_thread
       end
 
       def dispatch_notification(response)
@@ -236,18 +362,6 @@ module SurrealDB
         when Queue then handler.push(result)
         when Proc  then handler.call(result)
         end
-      end
-
-      def shutdown_notification_reader
-        stream_ptr = @stream_ptr
-        return unless stream_ptr
-
-        Native.sr_rpc_stream_close(stream_ptr)
-        @reader_thread&.join
-        Native.sr_rpc_stream_free(stream_ptr)
-      ensure
-        @stream_ptr = nil
-        @reader_thread = nil
       end
 
       def check_error!(ret, err_ptr)
@@ -273,16 +387,14 @@ module SurrealDB
       end
 
       def release_rpc_context
-        rpc_ptr = @rpc_ptr
+        resources = @resources
+        @resources = nil
         @rpc_ptr = nil
+        ObjectSpace.undefine_finalizer(self)
         begin
-          shutdown_notification_reader
-          if rpc_ptr
-            err_ptr = FFI::MemoryPointer.new(:pointer)
-            check_error!(Native.sr_surreal_rpc_close(rpc_ptr, err_ptr), err_ptr)
-          end
+          ret, err_ptr = resources.shutdown if resources
+          check_error!(ret, err_ptr) if ret
         ensure
-          Native.sr_surreal_rpc_free(rpc_ptr) if rpc_ptr
           reset_rpc_context!
           @live_mutex.synchronize { @live_handlers.clear }
         end

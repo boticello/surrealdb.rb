@@ -31,22 +31,28 @@ RSpec.describe 'embedded connection lifecycle', :embedded, :integration do
     2.times.map { results.pop }
   end
 
-  def abandoned_client_status
-    lib_dir = File.expand_path('../../../lib', __dir__)
-    script = <<~RUBY
+  def abandoned_client_script
+    <<~RUBY
       require 'weakref'
       require 'surrealdb/embedded'
       client = SurrealDB::Client.new('mem://')
       client.connect
       connection = WeakRef.new(client.connection)
+      reader_thread = client.connection.instance_variable_get(:@reader_thread)
       client = nil
       3.times { GC.start }
-      alive = connection.weakref_alive?
-      warn 'embedded connection remained reachable after GC' if alive
-      exit!(alive ? 1 : 0)
+      connection_alive = connection.weakref_alive?
+      reader_alive = reader_thread.alive?
+      warn 'embedded connection remained reachable after GC' if connection_alive
+      warn 'embedded notification reader remained alive after GC' if reader_alive
+      exit!(connection_alive || reader_alive ? 1 : 0)
     RUBY
+  end
+
+  def abandoned_client_status
+    lib_dir = File.expand_path('../../../lib', __dir__)
     wait_thread = nil
-    stdin, output, wait_thread = Open3.popen2e(RbConfig.ruby, '-I', lib_dir, '-e', script)
+    stdin, output, wait_thread = Open3.popen2e(RbConfig.ruby, '-I', lib_dir, '-e', abandoned_client_script)
     stdin.close
     [Timeout.timeout(5) { wait_thread.value }, output.read]
   ensure
@@ -147,6 +153,31 @@ RSpec.describe 'embedded connection lifecycle', :embedded, :integration do
     expect(client.connected?).to be(false)
     expect(SurrealDB::Native).to have_received(:sr_surreal_rpc_close).once
     expect(SurrealDB::Native).to have_received(:sr_surreal_rpc_free).once
+  end
+
+  it 'closes, joins, and frees finalizer-owned native resources exactly once' do
+    rpc_ptr = FFI::Pointer.new(1)
+    stream_ptr = FFI::Pointer.new(2)
+    resources = SurrealDB::Connections::Embedded::NativeResources.new(rpc_ptr)
+    reader_thread = instance_double(Thread)
+    resources.register_stream(stream_ptr)
+    resources.register_reader(reader_thread)
+
+    allow(reader_thread).to receive(:join)
+    allow(SurrealDB::Native).to receive(:sr_surreal_rpc_close).and_return(0)
+    allow(SurrealDB::Native).to receive(:sr_surreal_rpc_free)
+    allow(SurrealDB::Native).to receive(:sr_rpc_stream_close)
+    allow(SurrealDB::Native).to receive(:sr_rpc_stream_free)
+
+    finalizer = resources.finalizer
+    finalizer.call
+    finalizer.call
+
+    expect(reader_thread).to have_received(:join).once
+    expect(SurrealDB::Native).to have_received(:sr_rpc_stream_close).with(stream_ptr).once
+    expect(SurrealDB::Native).to have_received(:sr_rpc_stream_free).with(stream_ptr).once
+    expect(SurrealDB::Native).to have_received(:sr_surreal_rpc_close).with(rpc_ptr, anything).once
+    expect(SurrealDB::Native).to have_received(:sr_surreal_rpc_free).with(rpc_ptr).once
   end
 
   it 'does not retain reader threads across 64 connect and close cycles' do
