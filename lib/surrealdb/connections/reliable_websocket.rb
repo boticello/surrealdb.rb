@@ -48,6 +48,14 @@ module SurrealDB
         true
       end
 
+      def supports_queries?
+        true
+      end
+
+      def supports_sessions?
+        false
+      end
+
       def send_request(method, params = [])
         track_state(method, params)
         @inner.send_request(method, params)

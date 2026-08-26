@@ -4,6 +4,7 @@ module SurrealDB
   class Error < StandardError; end
 
   class ConnectionError < Error; end
+  class ThreadSafetyError < ConnectionError; end
   class TimeoutError < Error; end
   class ProtocolError < Error; end
 

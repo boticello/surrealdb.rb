@@ -17,4 +17,6 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.order = :random
   Kernel.srand config.seed
+
+  config.before(:example, :embedded) { require 'surrealdb/embedded' }
 end

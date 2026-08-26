@@ -4,7 +4,6 @@
 # Loads the FFI bindings and the Embedded connection class.
 #
 # Usage:
-#   require "surrealdb"
 #   require "surrealdb/embedded"
 #
 #   SurrealDB.connect("mem://") do |db|
@@ -16,6 +15,7 @@
 # - SURREALDB_LIB_PATH env var pointing to libsurrealdb_c
 # - libsurrealdb_c installed in the system library path
 
+require 'surrealdb'
 require_relative 'native/platform'
 require_relative 'native/ffi'
 require_relative 'connections/embedded'

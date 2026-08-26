@@ -76,3 +76,25 @@ jobs:
       - name: Stop SurrealDB
         if: always()
         run: docker rm -f surrealdb || true
+
+  embedded-integration-test:
+    runs-on: ubuntu-latest
+    env:
+      SURREALDB_LIB_PATH: ${{ github.workspace }}/surrealdb.c/target/debug/libsurrealdb_c.so
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          repository: surrealdb/surrealdb.c
+          ref: a26e6cd0c8eee004c3db12a105fd38ee8b66e9e5
+          path: surrealdb.c
+      - uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Build libsurrealdb_c
+        run: cargo build --manifest-path surrealdb.c/Cargo.toml
+
+      - name: Run embedded integration tests
+        run: bundle exec rspec spec/integration/embedded

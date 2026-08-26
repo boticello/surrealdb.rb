@@ -42,6 +42,9 @@ module SurrealDB
       end
 
       def connect
+        raise ConnectionError, 'already connected' if @connected
+
+        reset_rpc_context!
         uri = URI.parse(@url)
         @socket = open_socket(uri)
         ws_url = build_ws_url(uri)
@@ -59,29 +62,44 @@ module SurrealDB
       end
 
       def close
-        return unless @connected
+        if @connected
+          @connected = false
+          @driver&.close
+          shutdown_reader
+          @socket&.close
+          @socket = nil
 
-        @connected = false
-        @driver&.close
-        shutdown_reader
-        @socket&.close
-        @socket = nil
-
-        notify_pending_closed
-        log(:debug, 'WebSocket connection closed')
+          notify_pending_closed
+          log(:debug, 'WebSocket connection closed')
+        end
+        reset_rpc_context!
       end
 
       def send_request(method, params = [])
         raise ConnectionError, 'not connected' unless @connected
 
-        id, encoded = @rpc.encode_request(method, params)
+        wire_params, session_id, transaction_id = rpc_request_context(method, params)
+        id, encoded = @rpc.encode_request(
+          method,
+          wire_params,
+          session: session_id,
+          transaction: transaction_id
+        )
         entry = { result: nil, cv: ConditionVariable.new }
 
         @mutex.synchronize { @pending[id] = entry }
 
         begin
           @write_mutex.synchronize { @driver.binary(encoded) }
-          wait_for_response(entry)
+          result = begin
+            wait_for_response(entry)
+          rescue ServerError => e
+            reconcile_rpc_context_error(method, e)
+            raise
+          end
+          result = update_rpc_context_after_success(method, session_id, result)
+          @mutex.synchronize { @live_handlers.clear } if method == Protocol::Methods::DETACH
+          result
         ensure
           @mutex.synchronize { @pending.delete(id) }
         end
@@ -91,7 +109,15 @@ module SurrealDB
         true
       end
 
-      # Registers a handler for live query notifications.
+      def supports_queries?
+        true
+      end
+
+      def supports_sessions?
+        true
+      end
+
+      # Registers a live query notification handler.
       # @param live_query_id [String]
       # @param handler [Proc, Queue] receives notification hashes
       def on_notification(live_query_id, handler)

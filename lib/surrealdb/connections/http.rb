@@ -66,6 +66,10 @@ module SurrealDB
         result
       end
 
+      def supports_queries?
+        true
+      end
+
       private
 
       def build_request(body)

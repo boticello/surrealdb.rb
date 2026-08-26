@@ -95,6 +95,12 @@ RSpec.describe SurrealDB::Connections::ReliableWebSocket do
     end
   end
 
+  describe '#supports_sessions?' do
+    it 'is false because connection-scoped state cannot be replayed safely' do
+      expect(reliable.supports_sessions?).to be(false)
+    end
+  end
+
   describe '#remove_notification_handler' do
     it 'delegates and untracks subscriptions' do
       allow(inner).to receive(:on_notification)

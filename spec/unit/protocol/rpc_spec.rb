@@ -32,6 +32,19 @@ RSpec.describe SurrealDB::Protocol::RPC do
       expect(param).to be_a(CBOR::Tagged)
       expect(param.tag).to eq(SurrealDB::CBOR::Tags::TABLE)
     end
+
+    it 'encodes explicit session and transaction context' do
+      _, bytes = rpc.encode_request(
+        'query',
+        ['RETURN 1'],
+        session: '018f2f8c-8d43-7ad2-9c5a-4a2cc7bc9a51',
+        transaction: '018f2f8c-8d43-7ad2-9c5a-4a2cc7bc9a52'
+      )
+      decoded = CBOR.decode(bytes)
+
+      expect(decoded['session']).to eq('018f2f8c-8d43-7ad2-9c5a-4a2cc7bc9a51')
+      expect(decoded['txn']).to eq('018f2f8c-8d43-7ad2-9c5a-4a2cc7bc9a52')
+    end
   end
 
   describe '#decode_response' do

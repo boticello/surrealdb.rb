@@ -14,14 +14,18 @@ module SurrealDB
       #
       # @param method [String] RPC method name
       # @param params [Array] method parameters
+      # @param session [String, nil] explicit session UUID
+      # @param transaction [String, nil] explicit transaction UUID
       # @return [Array(Integer, String)] request ID and encoded CBOR bytes
-      def encode_request(method, params = [])
+      def encode_request(method, params = [], session: nil, transaction: nil)
         id = next_id
         payload = {
           'id' => id,
           'method' => method,
           'params' => CBOR::Encoder.prepare(params)
         }
+        payload['session'] = CBOR::Encoder.prepare(session) if session
+        payload['txn'] = CBOR::Encoder.prepare(transaction) if transaction
         [id, ::CBOR.encode(payload)]
       end
 

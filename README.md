@@ -48,11 +48,11 @@ end
 
 The SDK supports three transport protocols, selected automatically by URL scheme:
 
-| Scheme | Transport | Live Queries | Sessions | Requires |
-|--------|-----------|:------------:|:--------:|----------|
-| `ws://`, `wss://` | WebSocket | Yes | Yes | -- |
-| `http://`, `https://` | HTTP | No | No | -- |
-| `mem://`, `surrealkv://`, `file://` | Embedded | Yes | Yes | `surrealdb-embedded` gem |
+| Scheme | Transport | `query` | Live Queries | Sessions | Requires |
+|--------|-----------|:-------:|:------------:|:--------:|----------|
+| `ws://`, `wss://` | WebSocket | Yes | Yes | Yes | -- |
+| `http://`, `https://` | HTTP | Yes | No | No | -- |
+| `mem://`, `memory://`, `surrealkv://`, `file://` | Embedded | Yes | Yes | Yes | `surrealdb-embedded` gem + `libsurrealdb_c` |
 
 ```ruby
 # WebSocket (recommended for most use cases)
@@ -202,10 +202,10 @@ For in-process usage without a separate server, install the embedded gem:
 gem install surrealdb-embedded
 ```
 
-Then opt in with an extra require:
+Then opt in with the embedded entrypoint. It loads the base SDK, but the base
+SDK never loads `ffi` or a native library by itself:
 
 ```ruby
-require "surrealdb"
 require "surrealdb/embedded"
 
 SurrealDB.connect("mem://") do |db|
@@ -214,9 +214,59 @@ SurrealDB.connect("mem://") do |db|
 end
 ```
 
-Supported schemes: `mem://` (in-memory), `surrealkv://path` (persistent), `file://path` (file-based).
+Supported schemes:
+
+- `mem://` and `memory://` — in-memory
+- `surrealkv://path` — persistent SurrealKV
+- `file://path` — an SDK alias for `surrealkv://path`
+
+Connection options map to the complete `sr_option_t` C ABI:
+
+```ruby
+client = SurrealDB::Client.new(
+  "mem://",
+  query_timeout: 30,
+  transaction_timeout: 30
+)
+```
+
+Timeouts are integer seconds from 0 through 255; zero disables that timeout.
+The general `timeout:` option sets both native timeouts unless either specific
+option is supplied. `strict: true` is rejected because SurrealDB core 3.2.4
+does not expose a strict datastore builder option.
+
+An embedded connection belongs to the thread that first calls `#connect`.
+Using or closing it from another thread raises
+`SurrealDB::ThreadSafetyError`; create one `Client` per thread.
 
 Requires `libsurrealdb_c` installed on the system or pointed to via `SURREALDB_LIB_PATH`.
+The variable may name the shared-library file or its containing directory.
+The resolver recognizes macOS and Linux on arm64/x86_64 (including glibc and
+musl labels) and Windows on x86_64, and raises a platform-specific `LoadError`
+elsewhere.
+
+To build the native library from the sibling `surrealdb.c` project:
+
+```bash
+cargo build --release --manifest-path ../surrealdb.c/Cargo.toml
+SURREALDB_LIB_PATH=../surrealdb.c/target/release/libsurrealdb_c.dylib \
+  bundle exec rspec spec/integration/embedded
+```
+
+Use `libsurrealdb_c.so` on Linux and `surrealdb_c.dll` on Windows.
+
+### Native RPC behavior
+
+Embedded requests and responses use SurrealDB core's canonical CBOR codec and
+structured `DbResponse` envelope. Query statement arrays, structured errors,
+`NONE`, `RecordID`, UUID, decimal, datetime, duration, range, and geometry
+values therefore follow the same wire semantics as WebSocket RPC.
+
+Each embedded connection owns one native notification stream and a background
+Ruby reader. Closing the client cancels the blocking native read, joins the
+reader, frees the stream exactly once, shuts down the datastore, and releases
+SurrealKV paths for same-process reopening. Explicit sessions and transaction
+IDs are carried on every applicable request until detach, commit, or cancel.
 
 ## Automatic Reconnection
 
@@ -237,9 +287,14 @@ client.use("test", "test")
 client.query("SELECT * FROM person")
 ```
 
+Attached sessions and transactions are connection-scoped and are therefore
+not exposed by the automatic-reconnection wrapper. Use a plain WebSocket
+client when those RPC methods are required.
+
 ## Live Queries
 
-Live queries are supported over WebSocket and embedded connections.
+Live queries are supported over WebSocket and embedded connections. HTTP
+connections do not expose a notification stream.
 
 ```ruby
 SurrealDB.connect("ws://localhost:8000") do |db|
@@ -343,12 +398,15 @@ client = SurrealDB::Client.new("ws://localhost:8000", timeout: 10)
 
 ### Running Integration Tests
 
-Integration tests require a running SurrealDB instance:
+WebSocket and HTTP integration tests require a running SurrealDB instance:
 
 ```bash
 docker run --rm -p 8000:8000 surrealdb/surrealdb:latest start --user root --pass root --allow-all
-bundle exec rspec spec/integration
+bundle exec rspec spec/integration/websocket spec/integration/http
 ```
+
+Embedded integration tests use the real shared library; see
+[Embedded Database](#embedded-database) for the build and test command.
 
 ## Links
 

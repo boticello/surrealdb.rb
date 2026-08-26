@@ -25,7 +25,11 @@ Gem::Specification.new do |spec|
     'rubygems_mfa_required' => 'true'
   }
 
-  spec.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'CHANGELOG.md']
+  spec.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'CHANGELOG.md'].reject do |file|
+    file == 'lib/surrealdb/embedded.rb' ||
+      file == 'lib/surrealdb/connections/embedded.rb' ||
+      file.start_with?('lib/surrealdb/native')
+  end
   spec.require_paths = ['lib']
 
   spec.add_dependency 'bigdecimal'

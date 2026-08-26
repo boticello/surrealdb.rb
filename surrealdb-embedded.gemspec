@@ -25,7 +25,10 @@ Gem::Specification.new do |spec|
   spec.files = Dir[
     'lib/surrealdb/embedded.rb',
     'lib/surrealdb/native/**/*',
-    'lib/surrealdb/connections/embedded.rb'
+    'lib/surrealdb/connections/embedded.rb',
+    'LICENSE',
+    'README.md',
+    'CHANGELOG.md'
   ]
   spec.require_paths = ['lib']
 

@@ -98,6 +98,22 @@ RSpec.describe SurrealDB::Client do
     end
   end
 
+  describe '#query' do
+    let(:connection) { instance_double(SurrealDB::Connections::WebSocket, supports_queries?: true) }
+    let(:client) { described_class.new('ws://localhost:8000') }
+
+    before do
+      client.instance_variable_set(:@connection, connection)
+      allow(connection).to receive(:send_request).and_return([])
+    end
+
+    it 'forwards queries on a supported transport' do
+      client.query('RETURN $value', { 'value' => 1 })
+
+      expect(connection).to have_received(:send_request).with('query', ['RETURN $value', { 'value' => 1 }])
+    end
+  end
+
   describe '#run version parameter' do
     let(:connection) { instance_double(SurrealDB::Connections::WebSocket, supports_live_queries?: true) }
     let(:client) { described_class.new('ws://localhost:8000') }

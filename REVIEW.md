@@ -21,7 +21,7 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 - [ ] Live query notification handlers are removed when `kill` is called
 - [ ] Embedded FFI: every `sr_surreal_rpc_execute` response buffer is freed with `sr_free_byte_arr`
 - [ ] Embedded FFI: every error string is freed with `sr_free_string`
-- [ ] Embedded FFI: `sr_surreal_rpc_free` is called on close, `sr_rpc_stream_free` for notification stream
+- [ ] Embedded FFI: close calls `sr_rpc_stream_close`, joins the reader, frees the stream exactly once on the owner thread, then calls `sr_surreal_rpc_free`
 
 ## Error Handling
 
@@ -79,7 +79,7 @@ Use this checklist when reviewing pull requests to the SurrealDB Ruby SDK.
 - [ ] All FFI calls use `blocking: true` to release the GVL
 - [ ] `SR_FATAL` (-3) sets `@connected = false` and raises `ConnectionError`
 - [ ] `SR_ERROR` (-2) raises `ServerError` with the error string from `err_ptr`
-- [ ] Notification stream thread is joined/killed on `close`
+- [ ] Embedded live-query handlers are synchronized and native stream close wakes every blocking reader before ownership is freed
 - [ ] Platform detection handles macOS, Linux, and Windows
 - [ ] `SURREALDB_LIB_PATH` env var is checked before system library path
 

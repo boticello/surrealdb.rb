@@ -5,7 +5,7 @@ require 'uri'
 module SurrealDB
   # Main client for interacting with SurrealDB.
   #
-  # Provides a unified API across WebSocket and HTTP transports,
+  # Provides a unified API across WebSocket, HTTP, and opt-in embedded transports,
   # selected automatically based on the connection URL scheme.
   #
   # @example
@@ -19,7 +19,7 @@ module SurrealDB
     # @return [Connections::Base]
     attr_reader :connection
 
-    # @param url [String] connection URL (ws://, wss://, http://, https://)
+    # @param url [String] WebSocket, HTTP, or embedded connection URL
     # @param options [Hash] connection options (:timeout, etc.)
     def initialize(url, **options)
       @url = url
@@ -195,6 +195,7 @@ module SurrealDB
     # @param vars [Hash] query variables
     # @return [Array] array of result sets (one per statement)
     def query(sql, vars = {})
+      require_queries!
       params = [sql]
       params << vars unless vars.empty?
       @connection.send_request(Protocol::Methods::QUERY, params)
@@ -207,6 +208,7 @@ module SurrealDB
     # @param vars [Hash] query variables
     # @return [Array<QueryResult>]
     def query_raw(sql, vars = {})
+      require_queries!
       params = [sql]
       params << vars unless vars.empty?
       raw = @connection.send_request(Protocol::Methods::QUERY, params)
@@ -285,7 +287,7 @@ module SurrealDB
     # Attaches a new session to the connection.
     # @return [String] session ID
     def attach
-      require_websocket!('sessions')
+      require_sessions!('sessions')
       @connection.send_request(Protocol::Methods::ATTACH)
     end
 
@@ -293,28 +295,28 @@ module SurrealDB
     # @param session_id [String]
     # @return [void]
     def detach(session_id)
-      require_websocket!('sessions')
+      require_sessions!('sessions')
       @connection.send_request(Protocol::Methods::DETACH, [session_id])
     end
 
     # Begins a transaction on the current session.
     # @return [void]
     def begin_transaction
-      require_websocket!('transactions')
+      require_sessions!('transactions')
       @connection.send_request(Protocol::Methods::BEGIN_TXN)
     end
 
     # Commits the current transaction.
     # @return [void]
     def commit
-      require_websocket!('transactions')
+      require_sessions!('transactions')
       @connection.send_request(Protocol::Methods::COMMIT)
     end
 
     # Cancels (rolls back) the current transaction.
     # @return [void]
     def cancel
-      require_websocket!('transactions')
+      require_sessions!('transactions')
       @connection.send_request(Protocol::Methods::CANCEL)
     end
 
@@ -345,7 +347,7 @@ module SurrealDB
       else
         raise ArgumentError,
               "unsupported URL scheme: #{uri.scheme}. " \
-              'Use ws://, wss://, http://, https://, mem://, surrealkv://, or file://'
+              'Use ws://, wss://, http://, https://, mem://, memory://, surrealkv://, or file://'
       end
     end
 
@@ -369,10 +371,16 @@ module SurrealDB
       raise UnsupportedError, 'live queries require a WebSocket connection (ws:// or wss://)'
     end
 
-    def require_websocket!(feature)
-      return if @connection.supports_live_queries?
+    def require_queries!
+      return if @connection.supports_queries?
 
-      raise UnsupportedError, "#{feature} require a WebSocket connection (ws:// or wss://)"
+      raise UnsupportedError, 'queries are not supported by this transport'
+    end
+
+    def require_sessions!(feature)
+      return if @connection.supports_sessions?
+
+      raise UnsupportedError, "#{feature} are not supported by this transport"
     end
 
     def require_embedded!
@@ -380,7 +388,7 @@ module SurrealDB
 
       raise LoadError,
             'embedded connections require the surrealdb-embedded gem. ' \
-            'Add `require "surrealdb/embedded"` after `require "surrealdb"`.'
+            'Require it with `require "surrealdb/embedded"`.'
     end
   end
 end

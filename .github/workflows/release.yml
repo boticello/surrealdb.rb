@@ -38,8 +38,10 @@ jobs:
       - name: Test
         run: bundle exec rspec spec/unit
 
-      - name: Build gem
-        run: gem build surrealdb.gemspec
+      - name: Build gems
+        run: |
+          gem build surrealdb.gemspec
+          gem build surrealdb-embedded.gemspec
 
       - name: Extract changelog
         id: changelog
@@ -64,4 +66,7 @@ jobs:
       - name: Publish to RubyGems
         env:
           GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
-        run: gem push surrealdb-*.gem
+        run: |
+          for gem_file in surrealdb-*.gem; do
+            gem push "$gem_file"
+          done

@@ -11,9 +11,13 @@ bundle exec rspec           # Run all non-integration tests
 bundle exec rubocop         # Run linter
 bundle exec rake            # Run lint + unit tests (default task)
 
-# Integration tests require a running SurrealDB instance:
+# Network integration tests require a running SurrealDB instance:
 docker run --rm -p 8000:8000 surrealdb/surrealdb:latest start --user root --pass root --allow-all
-bundle exec rspec spec/integration
+bundle exec rspec spec/integration/websocket spec/integration/http
+
+# Embedded integration tests require a built libsurrealdb_c:
+SURREALDB_LIB_PATH=../surrealdb.c/target/debug/libsurrealdb_c.dylib \
+  bundle exec rspec spec/integration/embedded
 ```
 
 ## Architecture
@@ -44,7 +48,7 @@ SurrealDB::Native::*               — FFI bindings and platform detection (load
 URL scheme determines the transport:
 - `ws://` / `wss://` → `Connections::WebSocket` (background reader thread, live queries, ConditionVariable-based)
 - `http://` / `https://` → `Connections::HTTP` (synchronous POST to /rpc)
-- `mem://` / `surrealkv://` / `file://` → `Connections::Embedded` (FFI to libsurrealdb_c, opt-in)
+- `mem://` / `memory://` / `surrealkv://` / `file://` → `Connections::Embedded` (FFI to libsurrealdb_c, opt-in)
 - Pass `reconnect: true` to wrap WebSocket in `ReliableWebSocket` (auto-reconnect with state replay)
 
 ### CBOR custom tags
@@ -53,25 +57,25 @@ SurrealDB encodes custom types via numbered CBOR tags. See `lib/surrealdb/cbor/t
 
 ## Key design decisions
 
-1. **RPC API over direct C API**: The C library (`surrealdb.c`) exposes both a full C API (~40 functions) and a minimal RPC API (4 functions that pass CBOR bytes). We use the CBOR RPC approach because it keeps the FFI surface tiny and lets us handle all serialization in Ruby. This matches the Go SDK's approach.
+1. **RPC API over direct C API**: The C library (`surrealdb.c`) exposes both a full C API (~40 functions) and a small RPC API that passes CBOR bytes and opaque notification streams. We use the CBOR RPC approach because it keeps the FFI surface tiny and shares SurrealDB core's canonical serialization with other bindings.
 
 2. **CBOR, not JSON**: SurrealDB's RPC protocol uses CBOR for all transports (WebSocket, HTTP, embedded). The `cbor` gem handles encoding/decoding; we add a pre/post-processing step for SurrealDB's custom tagged types.
 
 3. **Structured error hierarchy**: Server errors carry `kind`, `details`, and a `cause` chain matching SurrealDB v3's structured error format. We also handle legacy v2 code+message errors.
 
-4. **Thread safety**: Neither connection type is safe for concurrent use from multiple threads. The WebSocket connection uses a `@write_mutex` to prevent frame corruption and a `@mutex` for pending-request routing, but the overall request lifecycle is not atomic. The HTTP connection shares `Net::HTTP` and header state. Users needing concurrency should use one Client per thread.
+4. **Thread safety**: Connections are not safe for concurrent use from multiple threads. The WebSocket connection uses a `@write_mutex` to prevent frame corruption and a `@mutex` for pending-request routing, but the overall request lifecycle is not atomic. The HTTP connection shares `Net::HTTP` and header state. Embedded connections enforce this contract: the thread that first calls `#connect` owns the instance, and cross-thread use raises `ThreadSafetyError`. Users needing concurrency should use one Client per thread.
 
 5. **Logger**: `SurrealDB.configuration.logger` is wired into both connections. WebSocket logs connection events at `:debug` level and dropped messages at `:warn`. HTTP logs connect/close at `:debug`. The logger must never receive credentials or auth tokens.
 
 6. **`send_rpc` escape hatch**: `Client#send_rpc(method, params)` forwards directly to the connection, letting users call new or undocumented RPC methods without waiting for SDK wrapper methods.
 
-7. **Sessions and transactions** (WebSocket only): `Client#attach`, `#detach`, `#begin_transaction`, `#commit`, `#cancel` wrap the SurrealDB v3 session/transaction RPC methods. These raise `UnsupportedError` on HTTP connections.
+7. **Sessions and transactions**: `Client#attach`, `#detach`, `#begin_transaction`, `#commit`, `#cancel` wrap the SurrealDB v3 session/transaction RPC methods on WebSocket and embedded connections. Embedded generates an explicit session UUID, carries session and transaction IDs in canonical top-level request fields, and clears transaction state after commit/cancel. HTTP remains unsupported.
 
-8. **Embedded connection** (opt-in): `require "surrealdb/embedded"` loads FFI bindings to `libsurrealdb_c`. Uses the same CBOR RPC protocol as WebSocket/HTTP -- the C library only handles byte transport. Only 8 C functions are wrapped. All FFI calls use `blocking: true` to release the GVL.
+8. **Embedded connection** (opt-in): `require "surrealdb/embedded"` loads the base SDK plus FFI bindings to `libsurrealdb_c`; the base gem never loads `ffi` by itself. `sr_surreal_rpc_execute` and `sr_rpc_stream_next` return the same canonical CBOR `DbResponse` envelope used by network RPC. Embedded starts one blocking notification reader; close calls the idempotent native stream close, joins the reader, frees the stream once on the owner thread, then frees the RPC context. All FFI calls use `blocking: true`.
 
 9. **Async/Fiber compatibility**: WebSocket `send_request` uses `ConditionVariable#wait` instead of busy-wait polling. This is compatible with Ruby's Fiber scheduler (Ruby 3.1+), so the SDK works transparently with the `async` gem and similar frameworks.
 
-10. **Reconnection**: `Connections::ReliableWebSocket` wraps a WebSocket with auto-reconnect. Tracks `use`, `signin`/`signup`/`authenticate`, `let` calls and replays them after reconnecting. Uses exponential backoff.
+10. **Reconnection**: `Connections::ReliableWebSocket` wraps a WebSocket with auto-reconnect. Tracks `use`, `signin`/`signup`/`authenticate`, `let` calls and replays them after reconnecting. Uses exponential backoff. It deliberately reports sessions/transactions unsupported because those IDs are connection-scoped and cannot be replayed safely.
 
 11. **`query_raw`**: Returns `Array<QueryResult>` with per-statement `status`, `time`, `result`, `error`. Use when you need to inspect individual statement outcomes in multi-statement queries.
 
@@ -92,7 +96,7 @@ SurrealDB encodes custom types via numbered CBOR tags. See `lib/surrealdb/cbor/t
 ## Testing
 
 - **Unit tests** (`spec/unit/`): Test CBOR round-trips, model parsing, RPC encoding, error mapping. No server needed.
-- **Integration tests** (`spec/integration/`): Test against a live SurrealDB. Organized by transport (`websocket/`, `http/`). Use shared examples for cross-transport parity.
+- **Integration tests** (`spec/integration/`): WebSocket/HTTP tests use a live SurrealDB server. Embedded tests build and load a real `libsurrealdb_c`, with `SURREALDB_LIB_PATH` naming the artifact. Organized by transport (`websocket/`, `http/`, `embedded/`).
 - **Environment variables**: `SURREALDB_WS_URL`, `SURREALDB_HTTP_URL`, `SURREALDB_USER`, `SURREALDB_PASS`, `SURREALDB_NS`, `SURREALDB_DB`.
 
 ## File layout

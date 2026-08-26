@@ -52,7 +52,7 @@ module SurrealDB
         when Tags::DURATION_STRING
           SurrealDB::Duration.parse(value)
         when Tags::DURATION_COMPACT
-          SurrealDB::Duration.new(value[0], value[1])
+          SurrealDB::Duration.new(value[0], value[1] || 0)
         when Tags::RANGE
           decode_range(value)
         when Tags::BOUND_INCLUDED
