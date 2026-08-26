@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           repository: surrealdb/surrealdb.c
-          ref: a26e6cd0c8eee004c3db12a105fd38ee8b66e9e5
+          ref: a5d1b3a1462d9828d338357c2006db99ab22923f
           path: surrealdb.c
       - uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
         with:
