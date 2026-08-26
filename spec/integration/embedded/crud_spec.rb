@@ -31,6 +31,9 @@ RSpec.describe 'embedded CRUD operations', :embedded, :integration do
 
       expect(persistent.select('embedded_persistence')).to contain_exactly(include('value' => 'stored'))
       persistent.close
+      persistent = new_persistent_client(endpoint)
+
+      expect(persistent.select('embedded_persistence')).to contain_exactly(include('value' => 'stored'))
       expect(Dir).not_to be_empty(dir)
     ensure
       persistent&.close
