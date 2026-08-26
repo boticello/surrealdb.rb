@@ -1,11 +1,20 @@
 # frozen_string_literal: true
 
 module SurrealDB
+  # Base error for all SurrealDB SDK errors.
   class Error < StandardError; end
 
+  # Raised when the connection to SurrealDB fails or is lost.
   class ConnectionError < Error; end
+
+  # Raised when an embedded connection is used from a thread other than
+  # the one that called {Connections::Embedded#connect}.
   class ThreadSafetyError < ConnectionError; end
+
+  # Raised when a request exceeds the configured timeout.
   class TimeoutError < Error; end
+
+  # Raised when the server response cannot be decoded.
   class ProtocolError < Error; end
 
   # Raised when a feature is unavailable on the current transport
@@ -77,14 +86,31 @@ module SurrealDB
     end
   end
 
+  # Raised when a SurrealQL query fails (syntax error, runtime error, etc.).
   class QueryError < ServerError; end
+
+  # Raised when a requested record or resource does not exist.
   class NotFoundError < ServerError; end
+
+  # Raised when an operation is not permitted (authentication/authorization).
   class NotAllowedError < ServerError; end
+
+  # Raised when creating a record that already exists.
   class AlreadyExistsError < ServerError; end
+
+  # Raised when input fails SurrealDB's validation rules.
   class ValidationError < ServerError; end
+
+  # Raised on an internal SurrealDB server error.
   class InternalServerError < ServerError; end
+
+  # Raised when SurrealDB cannot serialize the response.
   class SerializationError < ServerError; end
+
+  # Raised for SurrealDB configuration errors.
   class ConfigurationError < ServerError; end
+
+  # Raised when SurrealDB throws a value (e.g. THROW statement).
   class ThrownError < ServerError; end
 
   ServerError::KIND_TO_CLASS.merge!(

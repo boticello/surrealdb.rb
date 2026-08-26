@@ -6,6 +6,16 @@ require 'rubocop/rake_task'
 
 Bundler::GemHelper.install_tasks(name: 'surrealdb')
 
+begin
+  require 'yard'
+  YARD::Rake::YardocTask.new do |t|
+    t.options = ['--markup', 'markdown', '--no-private']
+    t.files = ['lib/**/*.rb']
+  end
+rescue LoadError
+  # yard not available
+end
+
 RSpec::Core::RakeTask.new(:spec) do |t|
   t.rspec_opts = ['--tag', '~integration']
 end

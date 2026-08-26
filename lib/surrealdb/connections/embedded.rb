@@ -19,6 +19,7 @@ module SurrealDB
     # is owned by the thread that first calls #connect; cross-thread use raises
     # ThreadSafetyError. Create one Client per thread.
     class Embedded < Base
+      # @return [Range<Integer>] valid timeout range (0-255 seconds)
       TIMEOUT_RANGE = (0..255)
 
       # Owns native resources independently from the connection object so its
@@ -161,6 +162,15 @@ module SurrealDB
         private_class_method :continue_reading?, :with_connection
       end
 
+      # Creates a new embedded connection.
+      #
+      # @param url [String] engine URL (mem://, memory://, surrealkv://path, file://path)
+      # @param options [Hash] connection options
+      # @option options [Integer] :timeout general timeout in seconds (default: 30)
+      # @option options [Integer] :query_timeout query-specific timeout (0-255)
+      # @option options [Integer] :transaction_timeout transaction-specific timeout (0-255)
+      # @option options [Boolean] :strict strict mode (raises {UnsupportedError}; always false)
+      # @raise [ArgumentError] if timeout is out of range or strict is true
       def initialize(url, **options)
         super
         default_timeout = options.fetch(:timeout, SurrealDB.configuration.timeout)
@@ -180,6 +190,13 @@ module SurrealDB
         @owner_mutex = Mutex.new
       end
 
+      # Opens the embedded connection and starts the notification reader.
+      #
+      # The calling thread becomes the owner thread; all subsequent
+      # operations must originate from the same thread.
+      #
+      # @return [void]
+      # @raise [ConnectionError] if already connected
       def connect
         claim_owner_thread!
         raise ConnectionError, 'already connected' if @rpc_ptr
@@ -209,6 +226,9 @@ module SurrealDB
         end
       end
 
+      # Closes the embedded connection and releases native resources.
+      #
+      # @return [void]
       def close
         verify_owner_thread!
         return unless @resources
@@ -218,6 +238,13 @@ module SurrealDB
         log(:debug, 'Embedded connection closed')
       end
 
+      # Sends a CBOR-encoded RPC request to the embedded SurrealDB engine.
+      #
+      # @param method [String] RPC method name (see {Protocol::Methods})
+      # @param params [Array] method parameters
+      # @return [Object] decoded response
+      # @raise [ConnectionError] if not connected
+      # @raise [ServerError] if the server returns an error
       def send_request(method, params = [])
         verify_owner_thread!
         raise ConnectionError, 'not connected' unless @connected
@@ -245,14 +272,17 @@ module SurrealDB
         result
       end
 
+      # @return [Boolean] always true for embedded connections
       def supports_live_queries?
         true
       end
 
+      # @return [Boolean] always true for embedded connections
       def supports_queries?
         true
       end
 
+      # @return [Boolean] always true for embedded connections
       def supports_sessions?
         true
       end

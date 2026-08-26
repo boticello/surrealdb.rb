@@ -1,11 +1,19 @@
 # frozen_string_literal: true
 
 module SurrealDB
-  # Represents the SurrealDB NONE value, which is distinct from NULL (nil).
-  # NONE indicates the absence of a value, while NULL is an explicit null.
+  # Represents the SurrealDB NONE value, distinct from NULL ({NilClass}).
+  #
+  # NONE indicates the absence of a value; NULL is an explicit null.
+  # Use {NONE} (the singleton) rather than constructing instances directly.
+  #
+  # @example
+  #   result = db.query("SELECT * FROM person WHERE name = 'nobody'")
+  #   result.first == SurrealDB::NONE  # => true when no match
   class None
+    # @return [None] the singleton NONE instance
     INSTANCE = new.freeze
 
+    # @return [None]
     def self.instance
       INSTANCE
     end

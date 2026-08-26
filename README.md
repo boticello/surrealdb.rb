@@ -255,6 +255,21 @@ SURREALDB_LIB_PATH=../surrealdb.c/target/release/libsurrealdb_c.dylib \
 
 Use `libsurrealdb_c.so` on Linux and `surrealdb_c.dll` on Windows.
 
+### Documentation
+
+Detailed documentation lives in the [`docs/`](docs/) directory:
+
+- [Tutorial](docs/tutorial.md) — your first embedded app in 5 minutes
+- [How-To Guides](docs/how-to.md) — task-oriented recipes
+- [Explanation](docs/explanation.md) — architecture and internals
+- [Reference](docs/reference.md) — embedded API surface
+
+Generate API docs with YARD:
+
+```bash
+bundle exec rake yard
+```
+
 ### Native RPC behavior
 
 Embedded requests and responses use SurrealDB core's canonical CBOR codec and

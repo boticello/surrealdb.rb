@@ -1,14 +1,27 @@
 # frozen_string_literal: true
 
 module SurrealDB
+  # A GeoJSON Point with longitude and latitude coordinates.
+  #
+  # @example
+  #   point = SurrealDB::GeometryPoint.new(-122.4194, 37.7749)
+  #   point.longitude  # => -122.4194
+  #   point.coordinates  # => [-122.4194, 37.7749]
   class GeometryPoint
-    attr_reader :longitude, :latitude
+    # @return [Float] longitude (x-axis)
+    attr_reader :longitude
 
+    # @return [Float] latitude (y-axis)
+    attr_reader :latitude
+
+    # @param longitude [Numeric]
+    # @param latitude [Numeric]
     def initialize(longitude, latitude)
       @longitude = longitude.to_f
       @latitude = latitude.to_f
     end
 
+    # @return [Array<Float>] [longitude, latitude]
     def coordinates
       [@longitude, @latitude]
     end
@@ -27,16 +40,24 @@ module SurrealDB
     end
   end
 
+  # A GeoJSON LineString defined by two or more points.
+  #
+  # @example
+  #   line = SurrealDB::GeometryLine.new(point1, point2, point3)
+  #   line.points.length  # => 3
   class GeometryLine
-    # @return [Array<GeometryPoint>]
+    # @return [Array<GeometryPoint>] ordered points defining the line
     attr_reader :points
 
+    # @param points [Array<GeometryPoint>] at least two points
+    # @raise [ArgumentError] if fewer than two points are provided
     def initialize(*points)
       raise ArgumentError, 'a line requires at least 2 points' if points.length < 2
 
       @points = points.freeze
     end
 
+    # @return [Array<Array<Float>>] array of [longitude, latitude] pairs
     def coordinates
       @points.map(&:coordinates)
     end
@@ -55,13 +76,20 @@ module SurrealDB
     end
   end
 
+  # A GeoJSON Polygon with an exterior ring and optional interior holes.
+  #
+  # @example
+  #   polygon = SurrealDB::GeometryPolygon.new(exterior_ring)
+  #   polygon_with_hole = SurrealDB::GeometryPolygon.new(exterior_ring, hole_ring)
   class GeometryPolygon
     # @return [GeometryLine] exterior ring
     attr_reader :exterior
 
-    # @return [Array<GeometryLine>] interior rings (holes)
+    # @return [Array<GeometryLine>] interior rings (holes), may be empty
     attr_reader :interiors
 
+    # @param exterior [GeometryLine] the outer ring
+    # @param interiors [Array<GeometryLine>] optional interior rings (holes)
     def initialize(exterior, *interiors)
       @exterior = exterior
       @interiors = interiors.freeze
@@ -81,9 +109,15 @@ module SurrealDB
     end
   end
 
+  # A GeoJSON MultiPoint collection.
+  #
+  # @example
+  #   multi = SurrealDB::GeometryMultiPoint.new(point1, point2)
   class GeometryMultiPoint
+    # @return [Array<GeometryPoint>]
     attr_reader :points
 
+    # @param points [Array<GeometryPoint>]
     def initialize(*points)
       @points = points.freeze
     end
@@ -98,9 +132,15 @@ module SurrealDB
     end
   end
 
+  # A GeoJSON MultiLineString collection.
+  #
+  # @example
+  #   multi = SurrealDB::GeometryMultiLine.new(line1, line2)
   class GeometryMultiLine
+    # @return [Array<GeometryLine>]
     attr_reader :lines
 
+    # @param lines [Array<GeometryLine>]
     def initialize(*lines)
       @lines = lines.freeze
     end
@@ -115,9 +155,15 @@ module SurrealDB
     end
   end
 
+  # A GeoJSON MultiPolygon collection.
+  #
+  # @example
+  #   multi = SurrealDB::GeometryMultiPolygon.new(polygon1, polygon2)
   class GeometryMultiPolygon
+    # @return [Array<GeometryPolygon>]
     attr_reader :polygons
 
+    # @param polygons [Array<GeometryPolygon>]
     def initialize(*polygons)
       @polygons = polygons.freeze
     end
@@ -132,9 +178,17 @@ module SurrealDB
     end
   end
 
+  # A GeoJSON GeometryCollection containing heterogeneous geometry types.
+  #
+  # @example
+  #   collection = SurrealDB::GeometryCollection.new(point, line, polygon)
   class GeometryCollection
+    # @return [Array<GeometryPoint, GeometryLine, GeometryPolygon,
+    #   GeometryMultiPoint, GeometryMultiLine, GeometryMultiPolygon>]
     attr_reader :geometries
 
+    # @param geometries [Array<GeometryPoint, GeometryLine, GeometryPolygon,
+    #   GeometryMultiPoint, GeometryMultiLine, GeometryMultiPolygon>]
     def initialize(*geometries)
       @geometries = geometries.freeze
     end
