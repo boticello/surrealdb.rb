@@ -3,6 +3,18 @@
 require 'spec_helper'
 
 RSpec.describe 'embedded connection options', :embedded, :integration do
+  it 'matches the three-byte native SrOption layout and zero defaults' do
+    option = SurrealDB::Native::SrOption.new
+
+    expect(SurrealDB::Native::SrOption.size).to eq(3)
+    expect(SurrealDB::Native::SrOption.offset_of(:strict)).to eq(0)
+    expect(SurrealDB::Native::SrOption.offset_of(:query_timeout)).to eq(1)
+    expect(SurrealDB::Native::SrOption.offset_of(:transaction_timeout)).to eq(2)
+    expect(option[:strict]).to be(false)
+    expect(option[:query_timeout]).to eq(0)
+    expect(option[:transaction_timeout]).to eq(0)
+  end
+
   it 'rejects strict mode because the C RPC path does not implement it' do
     expect do
       SurrealDB::Client.new('mem://', strict: true)
@@ -21,6 +33,18 @@ RSpec.describe 'embedded connection options', :embedded, :integration do
     client = SurrealDB::Client.new('mem://', query_timeout: 0, transaction_timeout: 255)
 
     expect { client.connect }.not_to raise_error
+  ensure
+    client&.close
+  end
+
+  it 'propagates query_timeout to native query execution' do
+    client = SurrealDB::Client.new('mem://', query_timeout: 1)
+    client.connect
+
+    result = client.query_raw('RETURN sleep(1500ms)').first
+
+    expect(result).to be_error
+    expect("#{result.result} #{result.error}").to match(/timed out|timeout/i)
   ensure
     client&.close
   end

@@ -29,4 +29,23 @@ RSpec.describe 'embedded live queries', :embedded, :integration do
     sleep 0.1
     expect(notifications).to be_empty
   end
+
+  it 'detaches live queries with an explicit session before implicit writes' do
+    client.connect
+    client.use('test', 'test')
+    table = unique_table('embedded_detach_live')
+    client.query("DEFINE TABLE #{table} SCHEMALESS")
+
+    session_id = client.attach
+    client.use('test', 'test')
+    live_query_id = client.live(table)
+    notifications = Queue.new
+    client.subscribe(live_query_id) { |notification| notifications << notification }
+
+    client.detach(session_id)
+    client.create(table, { 'value' => 'implicit' })
+    sleep 0.2
+
+    expect(notifications).to be_empty
+  end
 end

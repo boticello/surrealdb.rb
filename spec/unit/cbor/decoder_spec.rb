@@ -44,6 +44,19 @@ RSpec.describe SurrealDB::CBOR::Decoder do
       expect(described_class.resolve(tagged)).to eq(SurrealDB::Duration.new(1, 0))
     end
 
+    it 'handles string Duration tags' do
+      tagged = CBOR::Tagged.new(SurrealDB::CBOR::Tags::DURATION_STRING, '1h 500ms')
+
+      expect(described_class.resolve(tagged)).to eq(SurrealDB::Duration.new(3600, 500_000_000))
+    end
+
+    it 'handles string UUID tags' do
+      uuid = '018f2f8c-8d43-7ad2-9c5a-4a2cc7bc9a51'
+      tagged = CBOR::Tagged.new(SurrealDB::CBOR::Tags::UUID_STRING, uuid)
+
+      expect(described_class.resolve(tagged)).to eq(uuid)
+    end
+
     it 'handles Time (datetime)' do
       t = Time.utc(2024, 6, 15, 12, 30, 45)
       result = round_trip(t)
@@ -95,6 +108,50 @@ RSpec.describe SurrealDB::CBOR::Decoder do
       polygon = SurrealDB::GeometryPolygon.new(exterior)
       result = round_trip(polygon)
       expect(result).to eq(polygon)
+    end
+
+    it 'handles GeometryMultiPoint' do
+      multi_point = SurrealDB::GeometryMultiPoint.new(
+        SurrealDB::GeometryPoint.new(0.0, 0.0),
+        SurrealDB::GeometryPoint.new(1.0, 1.0)
+      )
+
+      expect(round_trip(multi_point)).to eq(multi_point)
+    end
+
+    it 'handles GeometryMultiLine' do
+      line = SurrealDB::GeometryLine.new(
+        SurrealDB::GeometryPoint.new(0.0, 0.0),
+        SurrealDB::GeometryPoint.new(1.0, 1.0)
+      )
+      multi_line = SurrealDB::GeometryMultiLine.new(line, line)
+
+      expect(round_trip(multi_line)).to eq(multi_line)
+    end
+
+    it 'handles GeometryMultiPolygon' do
+      exterior = SurrealDB::GeometryLine.new(
+        SurrealDB::GeometryPoint.new(0.0, 0.0),
+        SurrealDB::GeometryPoint.new(1.0, 0.0),
+        SurrealDB::GeometryPoint.new(1.0, 1.0),
+        SurrealDB::GeometryPoint.new(0.0, 0.0)
+      )
+      polygon = SurrealDB::GeometryPolygon.new(exterior)
+      multi_polygon = SurrealDB::GeometryMultiPolygon.new(polygon, polygon)
+
+      expect(round_trip(multi_polygon)).to eq(multi_polygon)
+    end
+
+    it 'handles GeometryCollection' do
+      collection = SurrealDB::GeometryCollection.new(
+        SurrealDB::GeometryPoint.new(1.0, 2.0),
+        SurrealDB::GeometryLine.new(
+          SurrealDB::GeometryPoint.new(0.0, 0.0),
+          SurrealDB::GeometryPoint.new(1.0, 1.0)
+        )
+      )
+
+      expect(round_trip(collection)).to eq(collection)
     end
 
     it 'handles nested structures' do

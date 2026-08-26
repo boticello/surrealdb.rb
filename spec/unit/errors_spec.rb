@@ -53,6 +53,23 @@ RSpec.describe SurrealDB::ServerError do
       expect(err).to be_a(SurrealDB::ValidationError)
     end
 
+    {
+      'Internal' => SurrealDB::InternalServerError,
+      'Serialization' => SurrealDB::SerializationError,
+      'Configuration' => SurrealDB::ConfigurationError,
+      'Thrown' => SurrealDB::ThrownError
+    }.each do |kind, error_class|
+      it "maps #{kind} kind to #{error_class}" do
+        err = described_class.from_response({
+                                              'kind' => kind,
+                                              'message' => "#{kind.downcase} failure"
+                                            })
+
+        expect(err).to be_a(error_class)
+        expect(err.message).to eq("#{kind.downcase} failure")
+      end
+    end
+
     it 'falls back to ServerError for unknown kinds' do
       err = described_class.from_response({
                                             'kind' => 'SomeFutureKind',
