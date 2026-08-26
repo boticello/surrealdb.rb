@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'open3'
+require 'rbconfig'
 require 'tmpdir'
 
 # These tests verify the Embedded connection's Ruby logic without loading
@@ -12,7 +14,15 @@ RSpec.describe 'SurrealDB::Connections::Embedded (structure)' do
   # checking its existence and that the main gem doesn't auto-load it.
 
   it 'is not auto-loaded by the main gem' do
-    expect(defined?(SurrealDB::Connections::Embedded)).to be_nil
+    lib_dir = File.expand_path('../../../lib', __dir__)
+    script = <<~RUBY
+      require 'surrealdb'
+      abort 'Embedded was auto-loaded' if defined?(SurrealDB::Connections::Embedded)
+      abort 'Native was auto-loaded' if defined?(SurrealDB::Native)
+    RUBY
+
+    output, status = Open3.capture2e(RbConfig.ruby, '-I', lib_dir, '-e', script)
+    expect(status).to be_success, output
   end
 
   it 'has the connection file at the expected path' do
@@ -73,7 +83,7 @@ RSpec.describe 'SurrealDB::Native::Platform' do
       before { allow(ENV).to receive(:fetch).and_call_original }
 
       it 'falls back to the library name for system lookup' do
-        allow(ENV).to receive(:[]).with('SURREALDB_LIB_PATH').and_return(nil)
+        allow(ENV).to receive(:fetch).with('SURREALDB_LIB_PATH', nil).and_return(nil)
         expect(SurrealDB::Native::Platform.library_path).to eq(SurrealDB::Native::Platform.library_name)
       end
     end
